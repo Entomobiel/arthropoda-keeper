@@ -274,3 +274,7 @@ python scripts/gen_translations.py      # vertalingen (nl/en) opnieuw genereren
 pytest tests/core                       # kernlogica, zonder Home Assistant
 pytest tests/ha                         # integratietests (pytest-homeassistant-custom-component; Linux/macOS, Python ≥ 3.13)
 ```
+
+## Licentie
+
+[MIT](LICENSE) © 2026 Entomobiel. Je mag de code vrij gebruiken, aanpassen en verspreiden, mits vermelding van de oorspronkelijke auteur.
