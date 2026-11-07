@@ -1,0 +1,141 @@
+# Voorbeeld-caresheets voor Arthropoda Keeper (formaat arthropoda-caresheet/1)
+#
+# LET OP: dit zijn ruwe richtwaarden om de integratie mee te testen, gebaseerd
+# op algemene houderijpraktijk. Controleer ze met een betrouwbare caresheet of
+# je eigen ervaring voor je ze gebruikt om dieren te verzorgen of klimaat te
+# sturen.
+---
+format: arthropoda-caresheet/1
+species:
+  scientific_name: Brachypelma hamorii
+  common_names: {nl: Mexicaanse roodknievogelspin, en: Mexican redknee tarantula}
+  group: tarantula
+  development: molting_adult
+  habitat: terrestrial
+  taxonomy: {class: Arachnida, order: Araneae, family: Theraphosidae}
+  urticating_hairs: true
+  legal: {cites: II}
+  diet: {prey: [krekel, kakkerlak, sprinkhaan], prey_size: "max. lichaamslengte"}
+  enclosure: {substrate: "turf/kokosvezel, licht vochtig in een hoek", depth_cm: 10, water_dish: true}
+care_profiles:
+  - temp_day: [22, 26]
+    temp_night: [18, 22]
+    humidity: [55, 70]
+    substrate_moisture: slightly_moist
+    ventilation: medium
+    feeding_interval_days: 14
+    cleaning_interval_days: 30
+    post_molt_fast_days: 10
+  - stage: juvenile
+    temp_day: [24, 27]
+    feeding_interval_days: 5
+    post_molt_fast_days: 5
+  - season: winter
+    months: [12, 1, 2]
+    temp_day: [19, 23]
+    temp_night: [16, 20]
+    feeding_interval_days: 28
+source: "Voorbeeldwaarden Arthropoda Keeper – controleren"
+---
+format: arthropoda-caresheet/1
+species:
+  scientific_name: Extatosoma tiaratum
+  common_names: {nl: Australische spookschrikkel, en: Giant prickly stick insect}
+  group: phasmid
+  development: hemimetabolous
+  habitat: arboreal
+  taxonomy: {class: Insecta, order: Phasmida, family: Phasmatidae}
+  diet: {plants: [braam, eik, eucalyptus, framboos]}
+  enclosure: {orientation: verticaal, min_height_cm: 60}
+care_profiles:
+  - temp_day: [20, 27]
+    temp_night: [17, 22]
+    humidity: [60, 75]
+    misting: "dagelijks licht, voedselplanten vers houden"
+    ventilation: high
+    feeding_interval_days: 4
+    cleaning_interval_days: 7
+  - stage: nymph
+    humidity: [65, 80]
+source: "Voorbeeldwaarden Arthropoda Keeper – controleren"
+---
+format: arthropoda-caresheet/1
+species:
+  scientific_name: Sphodromantis lineola
+  common_names: {nl: Afrikaanse bidsprinkhaan, en: African mantis}
+  group: mantis
+  development: hemimetabolous
+  habitat: arboreal
+  taxonomy: {class: Insecta, order: Mantodea, family: Mantidae}
+  diet: {prey: [fruitvlieg, huisvlieg, krekel], prey_size: "kleiner dan het halsschild"}
+care_profiles:
+  - temp_day: [24, 30]
+    temp_night: [20, 24]
+    humidity: [50, 65]
+    misting: "2-3× per week"
+    ventilation: high
+    feeding_interval_days: 3
+    cleaning_interval_days: 14
+    post_molt_fast_days: 2
+  - stage: nymph
+    feeding_interval_days: 2
+source: "Voorbeeldwaarden Arthropoda Keeper – controleren"
+---
+format: arthropoda-caresheet/1
+species:
+  scientific_name: Porcellio scaber
+  common_names: {nl: Ruwe pissebed, en: Common rough woodlouse}
+  group: isopod
+  development: ametabolous
+  habitat: terrestrial
+  taxonomy: {class: Malacostraca, order: Isopoda, family: Porcellionidae}
+  diet: {food: [eikenblad, rottend hout, groente, visvoer als eiwitbron]}
+  enclosure: {substrate: "bosgrond met bladeren en vermolmd hout, één kant vochtig"}
+care_profiles:
+  - temp_day: [18, 24]
+    temp_night: [15, 22]
+    humidity: [60, 85]
+    substrate_moisture: moist
+    feeding_interval_days: 4
+    cleaning_interval_days: 30
+    substrate_change_interval_days: 180
+source: "Voorbeeldwaarden Arthropoda Keeper – controleren"
+---
+format: arthropoda-caresheet/1
+species:
+  scientific_name: Pachnoda marginata
+  common_names: {nl: Afrikaanse rozenkever, en: Sun beetle}
+  group: beetle
+  development: holometabolous
+  habitat: terrestrial
+  taxonomy: {class: Insecta, order: Coleoptera, family: Scarabaeidae}
+  diet: {adult: [fruit, kevergelei], larva: [vermolmd loof, rottend hout]}
+care_profiles:
+  - temp_day: [22, 28]
+    temp_night: [18, 24]
+    humidity: [60, 70]
+    feeding_interval_days: 2
+    cleaning_interval_days: 14
+  - stage: larva
+    substrate_moisture: moist
+    feeding_interval_days: 14
+    substrate_change_interval_days: 90
+source: "Voorbeeldwaarden Arthropoda Keeper – controleren"
+---
+format: arthropoda-caresheet/1
+species:
+  scientific_name: Dytiscus marginalis
+  common_names: {nl: Geelgerande watertor, en: Great diving beetle}
+  group: aquatic
+  development: holometabolous
+  habitat: aquatic
+  taxonomy: {class: Insecta, order: Coleoptera, family: Dytiscidae}
+  temperament: "Roofzuchtig; niet samen houden met vissen of kleinere waterdieren"
+  diet: {prey: [stukjes vis, muggenlarven, regenwormen]}
+  enclosure: {notes: "Aquarium met afgedekt deksel (vliegt!), uitstapplaats voor verpopping"}
+care_profiles:
+  - water_temp: [10, 20]
+    feeding_interval_days: 3
+    water_change_interval_days: 7
+    cleaning_interval_days: 30
+source: "Voorbeeldwaarden Arthropoda Keeper – controleren"

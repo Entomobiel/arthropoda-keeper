@@ -1,0 +1,22 @@
+{
+  "domain": "arthropoda",
+  "name": "Arthropoda Keeper",
+  "after_dependencies": [
+    "ai_task",
+    "frontend",
+    "http",
+    "media_source",
+    "panel_custom",
+    "websocket_api"
+  ],
+  "codeowners": ["@Entomobiel"],
+  "config_flow": true,
+  "dependencies": [],
+  "documentation": "https://github.com/Entomobiel/arthropoda-keeper",
+  "integration_type": "hub",
+  "iot_class": "calculated",
+  "issue_tracker": "https://github.com/Entomobiel/arthropoda-keeper/issues",
+  "requirements": [],
+  "single_config_entry": true,
+  "version": "0.6.1"
+}

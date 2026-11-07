@@ -1,0 +1,863 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Arthropoda Keeper",
+        "description": "Maak je collectie aan. Daarna voeg je soorten toe via **Configureren** en dieren via **Dier toevoegen**.",
+        "data": {
+          "name": "Naam van de collectie"
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "Er is al een collectie.",
+      "single_instance_allowed": "Er is al een collectie."
+    }
+  },
+  "config_subentries": {
+    "animal": {
+      "entry_type": "Dier of kolonie",
+      "initiate_flow": {
+        "user": "Dier toevoegen",
+        "reconfigure": "Dier wijzigen"
+      },
+      "step": {
+        "user": {
+          "title": "Dier of kolonie toevoegen",
+          "data": {
+            "name": "Naam",
+            "species_id": "Soort",
+            "kind": "Type",
+            "sex": "Geslacht",
+            "stage": "Levensfase",
+            "instar": "Stadium (L-nummer / vervelling)",
+            "count": "Aantal (kolonie)",
+            "born_at": "Geboren / uitgekomen",
+            "acquired_at": "Aangeschaft op",
+            "origin": "Herkomst"
+          },
+          "data_description": {
+            "species_id": "Voeg eerst soorten toe via de opties van de integratie (Configureren).",
+            "kind": "Een kolonie is een groep (bv. pissebedden, voederdieren) met een geschat aantal.",
+            "instar": "Bv. 4 voor L4. Wordt automatisch verhoogd bij elke vervelling in het dagboek."
+          }
+        },
+        "sensors": {
+          "title": "Sensoren koppelen",
+          "description": "Alles is optioneel. Dieren in hetzelfde terrarium mogen dezelfde sensoren gebruiken.",
+          "data": {
+            "temperature_sensors": "Temperatuursensor(en)",
+            "humidity_sensor": "Luchtvochtigheidssensor",
+            "water_temperature_sensor": "Watertemperatuursensor",
+            "food_plants": "Voedselplanten"
+          },
+          "data_description": {
+            "temperature_sensors": "Meerdere mag (warme en koele zijde): alle sensoren moeten binnen het bereik liggen.",
+            "water_temperature_sensor": "Voor waterinsecten.",
+            "food_plants": "Planten uit de plant monitor die je voor dit dier kweekt. Ze staan voorgeselecteerd bij het noteren van een voedering."
+          }
+        },
+        "reconfigure": {
+          "title": "Dier wijzigen",
+          "data": {
+            "name": "Naam",
+            "species_id": "Soort",
+            "kind": "Type",
+            "sex": "Geslacht",
+            "stage": "Levensfase",
+            "instar": "Stadium (L-nummer / vervelling)",
+            "count": "Aantal (kolonie)",
+            "born_at": "Geboren / uitgekomen",
+            "acquired_at": "Aangeschaft op",
+            "origin": "Herkomst"
+          },
+          "data_description": {
+            "species_id": "Voeg eerst soorten toe via de opties van de integratie (Configureren).",
+            "kind": "Een kolonie is een groep (bv. pissebedden, voederdieren) met een geschat aantal.",
+            "instar": "Bv. 4 voor L4. Wordt automatisch verhoogd bij elke vervelling in het dagboek."
+          }
+        },
+        "reconfigure_sensors": {
+          "title": "Sensoren koppelen",
+          "data": {
+            "temperature_sensors": "Temperatuursensor(en)",
+            "humidity_sensor": "Luchtvochtigheidssensor",
+            "water_temperature_sensor": "Watertemperatuursensor",
+            "food_plants": "Voedselplanten"
+          },
+          "data_description": {
+            "temperature_sensors": "Meerdere mag (warme en koele zijde): alle sensoren moeten binnen het bereik liggen.",
+            "water_temperature_sensor": "Voor waterinsecten.",
+            "food_plants": "Planten uit de plant monitor die je voor dit dier kweekt. Ze staan voorgeselecteerd bij het noteren van een voedering."
+          }
+        },
+        "actuators": {
+          "title": "Klimaatsturing",
+          "description": "Kies wat de integratie mag aansturen. Alles is optioneel; zonder actuatoren wordt alleen bewaakt. Dieren die dezelfde actuator gebruiken, worden samen geregeld op het bereik waarin hun caresheets overlappen.",
+          "data": {
+            "heater": "Verwarming",
+            "mister": "Vernevelaar / beregening",
+            "lights": "Verlichting",
+            "fan": "Ventilator",
+            "water_heater": "Waterverwarming",
+            "pumps": "Pompen, filter, luchtpomp"
+          },
+          "data_description": {
+            "heater": "Schakelaar (warmtemat, -kabel, -lamp), dimbare lamp (wordt proportioneel geregeld) of een bestaande thermostaat (climate).",
+            "mister": "Schakelaar (geeft pulsen) of een script.",
+            "lights": "Volgt het dag/nachtritme.",
+            "fan": "Aan bij te hoge vochtigheid of temperatuur.",
+            "water_heater": "Voor waterinsecten; volgt de watertemperatuur.",
+            "pumps": "Altijd aan, behalve in onderhoudsmodus."
+          }
+        },
+        "control": {
+          "title": "Afstelling",
+          "description": "Bij gedeelde actuatoren geldt de afstelling van het eerst toegevoegde dier.",
+          "data": {
+            "hysteresis": "Hysterese verwarming",
+            "mist_seconds": "Duur van een vernevelpuls",
+            "mist_pause_minutes": "Minimale pauze tussen pulsen",
+            "mist_max_per_day": "Maximum pulsen per dag (op vochtigheid)",
+            "mist_times": "Vaste vernevelmomenten",
+            "light_ramp_minutes": "Op- en afdimmen (minuten)"
+          },
+          "data_description": {
+            "hysteresis": "Schakelmarge rond het midden van het doelbereik. Groter = minder vaak schakelen.",
+            "mist_max_per_day": "0 = geen maximum. Vaste tijdstippen tellen niet mee.",
+            "mist_times": "Bv. 08:00, 20:00. Leeg = alleen op vochtigheid.",
+            "light_ramp_minutes": "Alleen voor dimbare lampen en vaste uren. 0 = meteen aan/uit."
+          }
+        },
+        "reconfigure_actuators": {
+          "title": "Klimaatsturing",
+          "description": "Kies wat de integratie mag aansturen. Alles is optioneel; zonder actuatoren wordt alleen bewaakt. Dieren die dezelfde actuator gebruiken, worden samen geregeld op het bereik waarin hun caresheets overlappen.",
+          "data": {
+            "heater": "Verwarming",
+            "mister": "Vernevelaar / beregening",
+            "lights": "Verlichting",
+            "fan": "Ventilator",
+            "water_heater": "Waterverwarming",
+            "pumps": "Pompen, filter, luchtpomp"
+          },
+          "data_description": {
+            "heater": "Schakelaar (warmtemat, -kabel, -lamp), dimbare lamp (wordt proportioneel geregeld) of een bestaande thermostaat (climate).",
+            "mister": "Schakelaar (geeft pulsen) of een script.",
+            "lights": "Volgt het dag/nachtritme.",
+            "fan": "Aan bij te hoge vochtigheid of temperatuur.",
+            "water_heater": "Voor waterinsecten; volgt de watertemperatuur.",
+            "pumps": "Altijd aan, behalve in onderhoudsmodus."
+          }
+        },
+        "reconfigure_control": {
+          "title": "Afstelling",
+          "description": "Bij gedeelde actuatoren geldt de afstelling van het eerst toegevoegde dier.",
+          "data": {
+            "hysteresis": "Hysterese verwarming",
+            "mist_seconds": "Duur van een vernevelpuls",
+            "mist_pause_minutes": "Minimale pauze tussen pulsen",
+            "mist_max_per_day": "Maximum pulsen per dag (op vochtigheid)",
+            "mist_times": "Vaste vernevelmomenten",
+            "light_ramp_minutes": "Op- en afdimmen (minuten)"
+          },
+          "data_description": {
+            "hysteresis": "Schakelmarge rond het midden van het doelbereik. Groter = minder vaak schakelen.",
+            "mist_max_per_day": "0 = geen maximum. Vaste tijdstippen tellen niet mee.",
+            "mist_times": "Bv. 08:00, 20:00. Leeg = alleen op vochtigheid.",
+            "light_ramp_minutes": "Alleen voor dimbare lampen en vaste uren. 0 = meteen aan/uit."
+          }
+        }
+      },
+      "abort": {
+        "not_loaded": "De integratie is niet geladen.",
+        "no_species": "Er zijn nog geen soorten. Voeg eerst een soort toe of importeer een caresheet via Configureren.",
+        "reconfigure_successful": "Dier bijgewerkt."
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Arthropoda Keeper",
+        "menu_options": {
+          "add_species": "Soort toevoegen",
+          "import_caresheet": "Caresheet importeren (YAML)",
+          "settings": "Instellingen"
+        }
+      },
+      "settings": {
+        "title": "Instellingen",
+        "data": {
+          "day_start": "Dag begint om",
+          "day_end": "Nacht begint om",
+          "light_mode": "Dagritme",
+          "post_molt_fast_days": "Voederpauze na vervelling (dagen)",
+          "stale_minutes": "Sensor verouderd na (minuten)",
+          "alarm_delay_minutes": "Alarmvertraging (minuten)",
+          "notify_targets": "Meldingen sturen naar",
+          "digest_enabled": "Dagelijkse samenvatting",
+          "digest_time": "Samenvatting versturen om"
+        },
+        "data_description": {
+          "day_end": "Wordt genegeerd als de caresheet een daglengte (light_hours) opgeeft.",
+          "post_molt_fast_days": "Standaard; een caresheet kan per soort een andere waarde opgeven.",
+          "stale_minutes": "Een sensor die zolang niets doorgeeft, telt als onbereikbaar: de verwarming gaat dan uit. 0 = uitgeschakeld.",
+          "alarm_delay_minutes": "Hoelang een probleem moet duren voor er gemeld wordt. Gevaarlijk warm wordt altijd meteen gemeld.",
+          "notify_targets": "Bv. notify.mobile_app_mijn_gsm. Er komt altijd ook een melding in HA zelf.",
+          "digest_enabled": "Eén bericht per dag met de taken van vandaag en dieren met een probleem. Zonder meldingsdoelen verschijnt het als melding in HA."
+        }
+      },
+      "add_species": {
+        "title": "Soort toevoegen",
+        "description": "Basisgegevens met één klimaatprofiel. Profielen per levensfase of seizoen voeg je toe via een caresheet (YAML).",
+        "data": {
+          "scientific_name": "Wetenschappelijke naam",
+          "common_name_nl": "Nederlandse naam",
+          "common_name_en": "Engelse naam",
+          "group": "Groep",
+          "development": "Ontwikkeling",
+          "habitat": "Leefwijze",
+          "feeder": "Voederdier",
+          "temp_day_min": "Temperatuur overdag min",
+          "temp_day_max": "Temperatuur overdag max",
+          "temp_night_min": "Temperatuur 's nachts min",
+          "temp_night_max": "Temperatuur 's nachts max",
+          "humidity_min": "Luchtvochtigheid min",
+          "humidity_max": "Luchtvochtigheid max",
+          "water_temp_min": "Watertemperatuur min",
+          "water_temp_max": "Watertemperatuur max",
+          "feeding_interval_days": "Voederen elke … dagen",
+          "cleaning_interval_days": "Schoonmaken elke … dagen",
+          "water_change_interval_days": "Waterwissel elke … dagen",
+          "notes": "Notities"
+        }
+      },
+      "import_caresheet": {
+        "title": "Caresheet importeren",
+        "description": "Plak YAML of geef een bestand op (relatief aan /config). {error}",
+        "data": {
+          "yaml": "YAML",
+          "path": "Bestand",
+          "overwrite": "Bestaande soorten overschrijven"
+        }
+      }
+    },
+    "error": {
+      "invalid_range": "Bij elk bereik moeten min én max ingevuld zijn, met min ≤ max.",
+      "species_exists": "Deze soort bestaat al.",
+      "invalid_caresheet": "Caresheet ongeldig."
+    },
+    "abort": {
+      "not_loaded": "De integratie is niet geladen.",
+      "species_added": "Soort toegevoegd: {names}",
+      "caresheets_imported": "Geïmporteerd: {saved}\nOvergeslagen (bestond al): {skipped}"
+    }
+  },
+  "selector": {
+    "group": {
+      "options": {
+        "tarantula": "Vogelspin",
+        "true_spider": "Spin (overig)",
+        "scorpion": "Schorpioen",
+        "whip_spider": "Zweepspin / zweepstaartschorpioen",
+        "mantis": "Bidsprinkhaan",
+        "phasmid": "Wandelende tak / blad",
+        "orthoptera": "Sprinkhaan / krekel",
+        "roach": "Kakkerlak",
+        "isopod": "Pissebed",
+        "myriapod": "Duizend- / miljoenpoot",
+        "beetle": "Kever",
+        "ant": "Mier",
+        "lepidoptera": "Vlinder / mot",
+        "aquatic": "Waterinsect",
+        "other": "Overig"
+      }
+    },
+    "development": {
+      "options": {
+        "hemimetabolous": "Onvolledige gedaanteverwisseling (nimfen)",
+        "holometabolous": "Volledige gedaanteverwisseling (larve, pop)",
+        "ametabolous": "Geen gedaanteverwisseling",
+        "molting_adult": "Vervelt ook als adult"
+      }
+    },
+    "habitat": {
+      "options": {
+        "terrestrial": "Bodembewoner",
+        "arboreal": "Boombewoner",
+        "fossorial": "Graver",
+        "semi_aquatic": "Half-aquatisch",
+        "aquatic": "Aquatisch"
+      }
+    },
+    "kind": {
+      "options": {
+        "individual": "Individu",
+        "colony": "Kolonie / groep"
+      }
+    },
+    "sex": {
+      "options": {
+        "unknown": "Onbekend",
+        "female": "Vrouwtje",
+        "male": "Mannetje",
+        "probably_female": "Waarschijnlijk vrouwtje",
+        "probably_male": "Waarschijnlijk mannetje",
+        "mixed": "Gemengd"
+      }
+    },
+    "stage": {
+      "options": {
+        "egg": "Ei",
+        "nymph": "Nimf",
+        "larva": "Larve",
+        "pupa": "Pop",
+        "juvenile": "Juveniel",
+        "subadult": "Subadult",
+        "adult": "Adult"
+      }
+    },
+    "origin": {
+      "options": {
+        "bred": "Eigen kweek",
+        "bought": "Gekocht",
+        "wild_caught": "Wildvang",
+        "gift": "Gekregen",
+        "unknown": "Onbekend"
+      }
+    },
+    "feeding_result": {
+      "options": {
+        "accepted": "Gegeten",
+        "partial": "Deels gegeten",
+        "refused": "Geweigerd"
+      }
+    },
+    "task_kind": {
+      "options": {
+        "feeding": "Voederen",
+        "cleaning": "Schoonmaken",
+        "substrate_change": "Substraat vervangen",
+        "water_change": "Waterwissel"
+      }
+    },
+    "light_mode": {
+      "options": {
+        "fixed": "Vaste uren (daglengte uit de caresheet)",
+        "sun": "Volgens de zon (zonsopgang tot -ondergang)"
+      }
+    },
+    "season_mode": {
+      "options": {
+        "auto": "Automatisch (volgens maanden)",
+        "normal": "Normaal",
+        "winter": "Winter / diapauze",
+        "breeding": "Kweek"
+      }
+    },
+    "entry_type": {
+      "options": {
+        "feeding": "Gevoederd",
+        "feeding_refused": "Voer geweigerd",
+        "water_refill": "Water bijgevuld",
+        "remove_leftovers": "Voedselresten verwijderd",
+        "plant_food": "Voedselplanten vervangen",
+        "supplement": "Supplement gegeven",
+        "spot_clean": "Plaatselijk schoongemaakt",
+        "full_clean": "Volledig schoongemaakt",
+        "substrate_change": "Substraat vervangen",
+        "substrate_moisten": "Substraat bevochtigd",
+        "pest_check": "Controle schimmel/mijten/plagen",
+        "misting_manual": "Gesproeid",
+        "climate_adjust": "Klimaat aangepast",
+        "water_change": "Waterwissel",
+        "water_test": "Watertest",
+        "filter_clean": "Filter gereinigd",
+        "premolt_observed": "Premolt waargenomen",
+        "molt": "Vervelling",
+        "molt_problem": "Vervelingsprobleem",
+        "pupation": "Verpopping",
+        "eclosion": "Uit de pop gekomen",
+        "stage_change": "Levensfase gewijzigd",
+        "diapause_start": "Diapauze gestart",
+        "diapause_end": "Diapauze beëindigd",
+        "pairing": "Koppeling",
+        "egg_sac": "Eicocon",
+        "ootheca": "Ootheek",
+        "egg_laying": "Eieren gelegd",
+        "brood_pulled": "Eicocon/ootheek apart gezet",
+        "hatch": "Uitgekomen",
+        "split_colony": "Kolonie gesplitst",
+        "measurement": "Meting",
+        "count": "Telling",
+        "observation": "Observatie",
+        "health_issue": "Gezondheidsprobleem",
+        "treatment": "Behandeling",
+        "death": "Overleden",
+        "rehouse": "Verhuisd",
+        "escape": "Ontsnapt",
+        "recaptured": "Teruggevonden",
+        "acquired": "Aangeschaft",
+        "sold": "Verkocht",
+        "given_away": "Weggegeven",
+        "released": "Vrijgelaten",
+        "document_added": "Document toegevoegd",
+        "note": "Notitie"
+      }
+    }
+  },
+  "issues": {
+    "range_conflict": {
+      "title": "Klimaatconflict bij {actuator}",
+      "description": "De dieren {animals} delen {actuator}, maar hun doelbereiken overlappen niet. De regelaar gebruikt nu het gemiddelde. Zet deze dieren in aparte behuizingen, koppel een andere actuator of pas de caresheets aan."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "status": {
+        "name": "Status",
+        "state": {
+          "ok": "OK",
+          "problem": "Probleem",
+          "inactive": "Niet actief"
+        },
+        "state_attributes": {
+          "problems": {
+            "name": "Problemen"
+          }
+        }
+      },
+      "temperature": {
+        "name": "Temperatuur"
+      },
+      "humidity": {
+        "name": "Luchtvochtigheid"
+      },
+      "water_temperature": {
+        "name": "Watertemperatuur"
+      },
+      "stage": {
+        "name": "Levensfase",
+        "state": {
+          "egg": "Ei",
+          "nymph": "Nimf",
+          "larva": "Larve",
+          "pupa": "Pop",
+          "juvenile": "Juveniel",
+          "subadult": "Subadult",
+          "adult": "Adult"
+        }
+      },
+      "instar": {
+        "name": "Stadium"
+      },
+      "molt_count": {
+        "name": "Aantal vervellingen"
+      },
+      "colony_count": {
+        "name": "Koloniegrootte"
+      },
+      "days_since_feeding": {
+        "name": "Dagen sinds voedering"
+      },
+      "days_since_molt": {
+        "name": "Dagen sinds vervelling"
+      },
+      "days_since_cleaning": {
+        "name": "Dagen sinds schoonmaak"
+      },
+      "days_since_substrate_change": {
+        "name": "Dagen sinds substraatwissel"
+      },
+      "days_since_water_change": {
+        "name": "Dagen sinds waterwissel"
+      },
+      "next_feeding": {
+        "name": "Volgende voedering"
+      },
+      "length": {
+        "name": "Lichaamslengte"
+      },
+      "legspan": {
+        "name": "Spanwijdte"
+      },
+      "weight": {
+        "name": "Gewicht"
+      },
+      "target_temperature_min": {
+        "name": "Doeltemperatuur min"
+      },
+      "target_temperature_max": {
+        "name": "Doeltemperatuur max"
+      },
+      "target_humidity_min": {
+        "name": "Doelvochtigheid min"
+      },
+      "target_humidity_max": {
+        "name": "Doelvochtigheid max"
+      },
+      "open_tasks": {
+        "name": "Openstaande taken"
+      },
+      "low_stock": {
+        "name": "Voorraad laag"
+      },
+      "animals_with_problems": {
+        "name": "Dieren met een probleem"
+      },
+      "climate_control_status": {
+        "name": "Status klimaatregeling",
+        "state": {
+          "active": "Actief",
+          "paused": "Gepauzeerd",
+          "monitoring": "Alleen bewaken",
+          "maintenance": "Onderhoud"
+        }
+      }
+    },
+    "todo": {
+      "maintenance": {
+        "name": "Onderhoud"
+      }
+    },
+    "calendar": {
+      "calendar": {
+        "name": "Kalender"
+      }
+    },
+    "image": {
+      "photo": {
+        "name": "Foto"
+      }
+    },
+    "switch": {
+      "climate_control": {
+        "name": "Klimaatsturing"
+      },
+      "maintenance": {
+        "name": "Onderhoudsmodus"
+      }
+    },
+    "binary_sensor": {
+      "problem": {
+        "name": "Probleem"
+      },
+      "climate_out_of_range": {
+        "name": "Klimaat buiten bereik"
+      },
+      "feeding_overdue": {
+        "name": "Voederen achterstallig"
+      },
+      "premolt": {
+        "name": "Premolt"
+      }
+    },
+    "select": {
+      "season_mode": {
+        "name": "Seizoensprofiel",
+        "state": {
+          "auto": "Automatisch (volgens maanden)",
+          "normal": "Normaal",
+          "winter": "Winter / diapauze",
+          "breeding": "Kweek"
+        }
+      },
+      "stage_select": {
+        "name": "Levensfase instellen",
+        "state": {
+          "egg": "Ei",
+          "nymph": "Nimf",
+          "larva": "Larve",
+          "pupa": "Pop",
+          "juvenile": "Juveniel",
+          "subadult": "Subadult",
+          "adult": "Adult"
+        }
+      }
+    },
+    "button": {
+      "log_feeding": {
+        "name": "Gevoederd"
+      },
+      "log_misting": {
+        "name": "Gesproeid"
+      },
+      "log_spot_clean": {
+        "name": "Plaatselijk schoongemaakt"
+      },
+      "log_water_refill": {
+        "name": "Water bijgevuld"
+      }
+    }
+  },
+  "exceptions": {
+    "not_loaded": {
+      "message": "Arthropoda Keeper is niet geladen."
+    },
+    "unknown_animal": {
+      "message": "{device} is geen Arthropoda-dier."
+    },
+    "invalid_entry": {
+      "message": "Ongeldige dagboekregel: {error}"
+    },
+    "path_outside_config": {
+      "message": "Het bestand moet in de configuratiemap staan."
+    },
+    "no_caresheet": {
+      "message": "Geef YAML-tekst of een bestand op."
+    },
+    "invalid_caresheet": {
+      "message": "Caresheet ongeldig: {error}"
+    },
+    "unknown_task": {
+      "message": "Deze taak bestaat niet (meer)."
+    },
+    "no_values": {
+      "message": "Geef minstens één meetwaarde op."
+    }
+  },
+  "services": {
+    "log_entry": {
+      "name": "Dagboekregel toevoegen",
+      "description": "Voeg een handeling toe aan het dagboek.",
+      "fields": {
+        "animal": {
+          "name": "Dier(en)",
+          "description": "Een of meer dieren of kolonieën."
+        },
+        "timestamp": {
+          "name": "Tijdstip",
+          "description": "Standaard: nu."
+        },
+        "notes": {
+          "name": "Notities",
+          "description": "Vrije tekst."
+        },
+        "type": {
+          "name": "Handeling",
+          "description": "Soort handeling."
+        },
+        "data": {
+          "name": "Extra gegevens",
+          "description": "Optionele velden, bv. {stage: adult} of {length_mm: 30}."
+        }
+      }
+    },
+    "log_feeding": {
+      "name": "Voedering noteren",
+      "description": "Noteer een voedering.",
+      "fields": {
+        "animal": {
+          "name": "Dier(en)",
+          "description": "Een of meer dieren of kolonieën."
+        },
+        "timestamp": {
+          "name": "Tijdstip",
+          "description": "Standaard: nu."
+        },
+        "notes": {
+          "name": "Notities",
+          "description": "Vrije tekst."
+        },
+        "prey": {
+          "name": "Prooi/voedsel",
+          "description": "Bv. krekel, Dubia, fruitvlieg."
+        },
+        "quantity": {
+          "name": "Aantal",
+          "description": "Aantal prooidieren."
+        },
+        "prey_size": {
+          "name": "Prooigrootte",
+          "description": "Bv. L3, subadult, 1 cm."
+        },
+        "plants": {
+          "name": "Voedselplanten",
+          "description": "Planten uit de plant monitor die je gevoerd hebt."
+        },
+        "result": {
+          "name": "Resultaat",
+          "description": "Een geweigerde voedering zet de teller niet op nul."
+        }
+      }
+    },
+    "log_molt": {
+      "name": "Vervelling noteren",
+      "description": "Noteer een vervelling: stadium +1, premolt uit, voederpauze start.",
+      "fields": {
+        "animal": {
+          "name": "Dier(en)",
+          "description": "Een of meer dieren of kolonieën."
+        },
+        "timestamp": {
+          "name": "Tijdstip",
+          "description": "Standaard: nu."
+        },
+        "notes": {
+          "name": "Notities",
+          "description": "Vrije tekst."
+        },
+        "complete": {
+          "name": "Geslaagd",
+          "description": "Uit = vervelingsprobleem (stadium wijzigt niet)."
+        },
+        "instar_after": {
+          "name": "Stadium na vervelling",
+          "description": "Leeg = huidig +1."
+        },
+        "sex": {
+          "name": "Geslacht (exuvia)",
+          "description": "Geslacht bepaald op de vervellingshuid."
+        },
+        "exuvia_kept": {
+          "name": "Exuvia bewaard",
+          "description": "Vervellingshuid bewaard."
+        },
+        "legspan_mm": {
+          "name": "Spanwijdte",
+          "description": "Spanwijdte in mm."
+        },
+        "length_mm": {
+          "name": "Lichaamslengte",
+          "description": "Lichaamslengte in mm."
+        }
+      }
+    },
+    "add_measurement": {
+      "name": "Meting toevoegen",
+      "description": "Noteer lengte, spanwijdte, gewicht of aantal.",
+      "fields": {
+        "animal": {
+          "name": "Dier(en)",
+          "description": "Een of meer dieren of kolonieën."
+        },
+        "timestamp": {
+          "name": "Tijdstip",
+          "description": "Standaard: nu."
+        },
+        "notes": {
+          "name": "Notities",
+          "description": "Vrije tekst."
+        },
+        "length_mm": {
+          "name": "Lichaamslengte",
+          "description": "Lichaamslengte in mm."
+        },
+        "legspan_mm": {
+          "name": "Spanwijdte",
+          "description": "Spanwijdte in mm."
+        },
+        "weight_g": {
+          "name": "Gewicht",
+          "description": "Gewicht in gram."
+        },
+        "count": {
+          "name": "Aantal",
+          "description": "Geteld aantal dieren (kolonie)."
+        }
+      }
+    },
+    "set_stage": {
+      "name": "Levensfase instellen",
+      "description": "Wijzig levensfase en stadium (wordt in het dagboek genoteerd).",
+      "fields": {
+        "animal": {
+          "name": "Dier(en)",
+          "description": "Een of meer dieren of kolonieën."
+        },
+        "timestamp": {
+          "name": "Tijdstip",
+          "description": "Standaard: nu."
+        },
+        "notes": {
+          "name": "Notities",
+          "description": "Vrije tekst."
+        },
+        "stage": {
+          "name": "Levensfase",
+          "description": "Nieuwe levensfase."
+        },
+        "instar": {
+          "name": "Stadium",
+          "description": "Optioneel L-nummer."
+        }
+      }
+    },
+    "get_journal": {
+      "name": "Dagboek opvragen",
+      "description": "Geeft de recentste dagboekregels terug.",
+      "fields": {
+        "animal": {
+          "name": "Dier",
+          "description": "Leeg = alle dieren."
+        },
+        "type": {
+          "name": "Handeling",
+          "description": "Alleen dit type (bv. molt)."
+        },
+        "limit": {
+          "name": "Maximum",
+          "description": "Maximaal aantal regels."
+        }
+      }
+    },
+    "import_caresheet": {
+      "name": "Caresheet importeren",
+      "description": "Importeer soorten uit YAML (tekst of bestand in /config).",
+      "fields": {
+        "yaml": {
+          "name": "YAML",
+          "description": "Caresheet-tekst in het arthropoda-formaat."
+        },
+        "path": {
+          "name": "Bestand",
+          "description": "Pad relatief aan de configuratiemap."
+        },
+        "overwrite": {
+          "name": "Overschrijven",
+          "description": "Bestaande soorten vervangen."
+        }
+      }
+    },
+    "export_species": {
+      "name": "Soorten exporteren",
+      "description": "Exporteer soorten als caresheet-YAML.",
+      "fields": {
+        "species": {
+          "name": "Soorten",
+          "description": "Wetenschappelijke namen; leeg = alle."
+        },
+        "path": {
+          "name": "Bestand",
+          "description": "Optioneel: ook wegschrijven naar dit bestand in /config."
+        }
+      }
+    },
+    "send_digest": {
+      "name": "Samenvatting nu versturen",
+      "description": "Stuurt meteen de dagelijkse samenvatting (handig om te testen)."
+    },
+    "snooze_task": {
+      "name": "Taak uitstellen",
+      "description": "Stel een onderhoudstaak een aantal dagen uit.",
+      "fields": {
+        "animal": {
+          "name": "Dier",
+          "description": "Het dier."
+        },
+        "task": {
+          "name": "Taak",
+          "description": "Welke taak."
+        },
+        "days": {
+          "name": "Dagen",
+          "description": "Uitstellen tot het begin van over zoveel dagen."
+        }
+      }
+    },
+    "list_species": {
+      "name": "Soorten oplijsten",
+      "description": "Geeft alle soorten in de database terug."
+    }
+  }
+}

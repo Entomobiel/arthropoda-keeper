@@ -1,0 +1,283 @@
+log_entry:
+  fields:
+    animal: &animal
+      required: true
+      selector:
+        device:
+          integration: arthropoda
+          multiple: true
+    type:
+      required: true
+      selector:
+        select:
+          translation_key: entry_type
+          options:
+            - feeding
+            - feeding_refused
+            - water_refill
+            - remove_leftovers
+            - plant_food
+            - supplement
+            - spot_clean
+            - full_clean
+            - substrate_change
+            - substrate_moisten
+            - pest_check
+            - misting_manual
+            - climate_adjust
+            - water_change
+            - water_test
+            - filter_clean
+            - premolt_observed
+            - molt
+            - molt_problem
+            - pupation
+            - eclosion
+            - stage_change
+            - diapause_start
+            - diapause_end
+            - pairing
+            - egg_sac
+            - ootheca
+            - egg_laying
+            - brood_pulled
+            - hatch
+            - split_colony
+            - measurement
+            - count
+            - observation
+            - health_issue
+            - treatment
+            - death
+            - rehouse
+            - escape
+            - recaptured
+            - acquired
+            - sold
+            - given_away
+            - released
+            - document_added
+            - note
+    timestamp: &timestamp
+      selector:
+        datetime:
+    notes: &notes
+      selector:
+        text:
+          multiline: true
+    data:
+      selector:
+        object:
+
+log_feeding:
+  fields:
+    animal: *animal
+    prey:
+      example: "krekel"
+      selector:
+        text:
+    quantity:
+      selector:
+        number:
+          min: 0
+          max: 1000
+          mode: box
+    prey_size:
+      example: "L3"
+      selector:
+        text:
+    plants:
+      selector:
+        entity:
+          domain: plant
+          multiple: true
+    result:
+      default: accepted
+      selector:
+        select:
+          translation_key: feeding_result
+          options:
+            - accepted
+            - partial
+            - refused
+    timestamp: *timestamp
+    notes: *notes
+
+log_molt:
+  fields:
+    animal: *animal
+    complete:
+      default: true
+      selector:
+        boolean:
+    instar_after:
+      selector:
+        number:
+          min: 0
+          max: 30
+          mode: box
+    sex:
+      selector:
+        select:
+          translation_key: sex
+          options:
+            - unknown
+            - female
+            - male
+            - probably_female
+            - probably_male
+    exuvia_kept:
+      selector:
+        boolean:
+    legspan_mm:
+      selector:
+        number:
+          min: 0
+          max: 400
+          step: 0.5
+          unit_of_measurement: mm
+          mode: box
+    length_mm:
+      selector:
+        number:
+          min: 0
+          max: 400
+          step: 0.5
+          unit_of_measurement: mm
+          mode: box
+    timestamp: *timestamp
+    notes: *notes
+
+add_measurement:
+  fields:
+    animal: *animal
+    length_mm:
+      selector:
+        number:
+          min: 0
+          max: 400
+          step: 0.5
+          unit_of_measurement: mm
+          mode: box
+    legspan_mm:
+      selector:
+        number:
+          min: 0
+          max: 400
+          step: 0.5
+          unit_of_measurement: mm
+          mode: box
+    weight_g:
+      selector:
+        number:
+          min: 0
+          max: 500
+          step: 0.01
+          unit_of_measurement: g
+          mode: box
+    count:
+      selector:
+        number:
+          min: 0
+          max: 100000
+          mode: box
+    timestamp: *timestamp
+    notes: *notes
+
+set_stage:
+  fields:
+    animal: *animal
+    stage:
+      required: true
+      selector:
+        select:
+          translation_key: stage
+          options:
+            - egg
+            - nymph
+            - larva
+            - pupa
+            - juvenile
+            - subadult
+            - adult
+    instar:
+      selector:
+        number:
+          min: 0
+          max: 30
+          mode: box
+    timestamp: *timestamp
+    notes: *notes
+
+get_journal:
+  fields:
+    animal:
+      selector:
+        device:
+          integration: arthropoda
+    type:
+      selector:
+        text:
+    limit:
+      default: 50
+      selector:
+        number:
+          min: 1
+          max: 1000
+          mode: box
+
+import_caresheet:
+  fields:
+    yaml:
+      selector:
+        text:
+          multiline: true
+    path:
+      example: "arthropoda/caresheets/voorbeelden.yaml"
+      selector:
+        text:
+    overwrite:
+      default: false
+      selector:
+        boolean:
+
+export_species:
+  fields:
+    species:
+      example: "Brachypelma hamorii"
+      selector:
+        text:
+          multiple: true
+    path:
+      example: "arthropoda/export/soorten.yaml"
+      selector:
+        text:
+
+list_species:
+
+send_digest:
+
+snooze_task:
+  fields:
+    animal:
+      required: true
+      selector:
+        device:
+          integration: arthropoda
+    task:
+      required: true
+      selector:
+        select:
+          translation_key: task_kind
+          options:
+            - feeding
+            - cleaning
+            - substrate_change
+            - water_change
+    days:
+      default: 1
+      selector:
+        number:
+          min: 1
+          max: 365
+          mode: box

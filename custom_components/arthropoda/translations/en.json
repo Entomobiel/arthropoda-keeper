@@ -1,0 +1,863 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Arthropoda Keeper",
+        "description": "Create your collection. Then add species via **Configure** and animals via **Add animal**.",
+        "data": {
+          "name": "Collection name"
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "A collection already exists.",
+      "single_instance_allowed": "A collection already exists."
+    }
+  },
+  "config_subentries": {
+    "animal": {
+      "entry_type": "Animal or colony",
+      "initiate_flow": {
+        "user": "Add animal",
+        "reconfigure": "Edit animal"
+      },
+      "step": {
+        "user": {
+          "title": "Add animal or colony",
+          "data": {
+            "name": "Name",
+            "species_id": "Species",
+            "kind": "Type",
+            "sex": "Sex",
+            "stage": "Life stage",
+            "instar": "Instar",
+            "count": "Count (colony)",
+            "born_at": "Born / hatched",
+            "acquired_at": "Acquired on",
+            "origin": "Origin"
+          },
+          "data_description": {
+            "species_id": "Add species first via the integration options (Configure).",
+            "kind": "A colony is a group (e.g. isopods, feeders) with an estimated count.",
+            "instar": "E.g. 4 for L4. Increases automatically with each logged molt."
+          }
+        },
+        "sensors": {
+          "title": "Link sensors",
+          "description": "Everything is optional. Animals in the same enclosure may share sensors.",
+          "data": {
+            "temperature_sensors": "Temperature sensor(s)",
+            "humidity_sensor": "Humidity sensor",
+            "water_temperature_sensor": "Water temperature sensor",
+            "food_plants": "Food plants"
+          },
+          "data_description": {
+            "temperature_sensors": "Multiple allowed (warm and cool side): all must be within range.",
+            "water_temperature_sensor": "For aquatic species.",
+            "food_plants": "Plants from the plant monitor that you grow for this animal. They are preselected when logging a feeding."
+          }
+        },
+        "reconfigure": {
+          "title": "Edit animal",
+          "data": {
+            "name": "Name",
+            "species_id": "Species",
+            "kind": "Type",
+            "sex": "Sex",
+            "stage": "Life stage",
+            "instar": "Instar",
+            "count": "Count (colony)",
+            "born_at": "Born / hatched",
+            "acquired_at": "Acquired on",
+            "origin": "Origin"
+          },
+          "data_description": {
+            "species_id": "Add species first via the integration options (Configure).",
+            "kind": "A colony is a group (e.g. isopods, feeders) with an estimated count.",
+            "instar": "E.g. 4 for L4. Increases automatically with each logged molt."
+          }
+        },
+        "reconfigure_sensors": {
+          "title": "Link sensors",
+          "data": {
+            "temperature_sensors": "Temperature sensor(s)",
+            "humidity_sensor": "Humidity sensor",
+            "water_temperature_sensor": "Water temperature sensor",
+            "food_plants": "Food plants"
+          },
+          "data_description": {
+            "temperature_sensors": "Multiple allowed (warm and cool side): all must be within range.",
+            "water_temperature_sensor": "For aquatic species.",
+            "food_plants": "Plants from the plant monitor that you grow for this animal. They are preselected when logging a feeding."
+          }
+        },
+        "actuators": {
+          "title": "Climate control",
+          "description": "Choose what the integration may control. Everything is optional; without actuators it only monitors. Animals sharing an actuator are controlled together using the range where their caresheets overlap.",
+          "data": {
+            "heater": "Heater",
+            "mister": "Mister / rain system",
+            "lights": "Lighting",
+            "fan": "Fan",
+            "water_heater": "Water heater",
+            "pumps": "Pumps, filter, air pump"
+          },
+          "data_description": {
+            "heater": "Switch (heat mat, cable, lamp), dimmable light (proportional control) or an existing thermostat (climate).",
+            "mister": "Switch (pulsed) or a script.",
+            "lights": "Follows the day/night rhythm.",
+            "fan": "On when humidity or temperature is too high.",
+            "water_heater": "For aquatic species; follows water temperature.",
+            "pumps": "Always on, except in maintenance mode."
+          }
+        },
+        "control": {
+          "title": "Tuning",
+          "description": "For shared actuators, the tuning of the first added animal applies.",
+          "data": {
+            "hysteresis": "Heater hysteresis",
+            "mist_seconds": "Mist pulse duration",
+            "mist_pause_minutes": "Minimum pause between pulses",
+            "mist_max_per_day": "Maximum pulses per day (humidity)",
+            "mist_times": "Scheduled misting times",
+            "light_ramp_minutes": "Dim up/down (minutes)"
+          },
+          "data_description": {
+            "hysteresis": "Switching margin around the middle of the target range. Larger = fewer switches.",
+            "mist_max_per_day": "0 = no limit. Scheduled times are not limited.",
+            "mist_times": "E.g. 08:00, 20:00. Empty = humidity only.",
+            "light_ramp_minutes": "Only for dimmable lights and fixed hours. 0 = switch instantly."
+          }
+        },
+        "reconfigure_actuators": {
+          "title": "Climate control",
+          "description": "Choose what the integration may control. Everything is optional; without actuators it only monitors. Animals sharing an actuator are controlled together using the range where their caresheets overlap.",
+          "data": {
+            "heater": "Heater",
+            "mister": "Mister / rain system",
+            "lights": "Lighting",
+            "fan": "Fan",
+            "water_heater": "Water heater",
+            "pumps": "Pumps, filter, air pump"
+          },
+          "data_description": {
+            "heater": "Switch (heat mat, cable, lamp), dimmable light (proportional control) or an existing thermostat (climate).",
+            "mister": "Switch (pulsed) or a script.",
+            "lights": "Follows the day/night rhythm.",
+            "fan": "On when humidity or temperature is too high.",
+            "water_heater": "For aquatic species; follows water temperature.",
+            "pumps": "Always on, except in maintenance mode."
+          }
+        },
+        "reconfigure_control": {
+          "title": "Tuning",
+          "description": "For shared actuators, the tuning of the first added animal applies.",
+          "data": {
+            "hysteresis": "Heater hysteresis",
+            "mist_seconds": "Mist pulse duration",
+            "mist_pause_minutes": "Minimum pause between pulses",
+            "mist_max_per_day": "Maximum pulses per day (humidity)",
+            "mist_times": "Scheduled misting times",
+            "light_ramp_minutes": "Dim up/down (minutes)"
+          },
+          "data_description": {
+            "hysteresis": "Switching margin around the middle of the target range. Larger = fewer switches.",
+            "mist_max_per_day": "0 = no limit. Scheduled times are not limited.",
+            "mist_times": "E.g. 08:00, 20:00. Empty = humidity only.",
+            "light_ramp_minutes": "Only for dimmable lights and fixed hours. 0 = switch instantly."
+          }
+        }
+      },
+      "abort": {
+        "not_loaded": "The integration is not loaded.",
+        "no_species": "There are no species yet. Add a species or import a caresheet via Configure first.",
+        "reconfigure_successful": "Animal updated."
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Arthropoda Keeper",
+        "menu_options": {
+          "add_species": "Add species",
+          "import_caresheet": "Import caresheet (YAML)",
+          "settings": "Settings"
+        }
+      },
+      "settings": {
+        "title": "Settings",
+        "data": {
+          "day_start": "Day starts at",
+          "day_end": "Night starts at",
+          "light_mode": "Day rhythm",
+          "post_molt_fast_days": "Feeding pause after molt (days)",
+          "stale_minutes": "Sensor stale after (minutes)",
+          "alarm_delay_minutes": "Alarm delay (minutes)",
+          "notify_targets": "Send notifications to",
+          "digest_enabled": "Daily summary",
+          "digest_time": "Send summary at"
+        },
+        "data_description": {
+          "day_end": "Ignored when the caresheet sets a day length (light_hours).",
+          "post_molt_fast_days": "Default; a caresheet can set a different value per species.",
+          "stale_minutes": "A sensor that reports nothing for this long counts as unavailable: heating is switched off. 0 = disabled.",
+          "alarm_delay_minutes": "How long a problem must last before notifying. Dangerously hot is always notified immediately.",
+          "notify_targets": "E.g. notify.mobile_app_my_phone. A notification in HA itself is always created.",
+          "digest_enabled": "One message a day with today's tasks and animals with a problem. Without notification targets it appears as a notification in HA."
+        }
+      },
+      "add_species": {
+        "title": "Add species",
+        "description": "Basic data with one climate profile. Per-stage or seasonal profiles can be added via a caresheet (YAML).",
+        "data": {
+          "scientific_name": "Scientific name",
+          "common_name_nl": "Dutch name",
+          "common_name_en": "English name",
+          "group": "Group",
+          "development": "Development",
+          "habitat": "Habitat",
+          "feeder": "Feeder insect",
+          "temp_day_min": "Day temperature min",
+          "temp_day_max": "Day temperature max",
+          "temp_night_min": "Night temperature min",
+          "temp_night_max": "Night temperature max",
+          "humidity_min": "Humidity min",
+          "humidity_max": "Humidity max",
+          "water_temp_min": "Water temperature min",
+          "water_temp_max": "Water temperature max",
+          "feeding_interval_days": "Feed every … days",
+          "cleaning_interval_days": "Clean every … days",
+          "water_change_interval_days": "Water change every … days",
+          "notes": "Notes"
+        }
+      },
+      "import_caresheet": {
+        "title": "Import caresheet",
+        "description": "Paste YAML or give a file (relative to /config). {error}",
+        "data": {
+          "yaml": "YAML",
+          "path": "File",
+          "overwrite": "Overwrite existing species"
+        }
+      }
+    },
+    "error": {
+      "invalid_range": "Each range needs both min and max, with min ≤ max.",
+      "species_exists": "This species already exists.",
+      "invalid_caresheet": "Invalid caresheet."
+    },
+    "abort": {
+      "not_loaded": "The integration is not loaded.",
+      "species_added": "Species added: {names}",
+      "caresheets_imported": "Imported: {saved}\nSkipped (already existed): {skipped}"
+    }
+  },
+  "selector": {
+    "group": {
+      "options": {
+        "tarantula": "Tarantula",
+        "true_spider": "True spider",
+        "scorpion": "Scorpion",
+        "whip_spider": "Whip spider / vinegaroon",
+        "mantis": "Mantis",
+        "phasmid": "Stick or leaf insect",
+        "orthoptera": "Grasshopper / cricket",
+        "roach": "Cockroach",
+        "isopod": "Isopod",
+        "myriapod": "Centipede / millipede",
+        "beetle": "Beetle",
+        "ant": "Ant",
+        "lepidoptera": "Butterfly / moth",
+        "aquatic": "Aquatic insect",
+        "other": "Other"
+      }
+    },
+    "development": {
+      "options": {
+        "hemimetabolous": "Hemimetabolous (nymphs)",
+        "holometabolous": "Holometabolous (larva, pupa)",
+        "ametabolous": "Ametabolous",
+        "molting_adult": "Molts as adult"
+      }
+    },
+    "habitat": {
+      "options": {
+        "terrestrial": "Terrestrial",
+        "arboreal": "Arboreal",
+        "fossorial": "Fossorial",
+        "semi_aquatic": "Semi-aquatic",
+        "aquatic": "Aquatic"
+      }
+    },
+    "kind": {
+      "options": {
+        "individual": "Individual",
+        "colony": "Colony / group"
+      }
+    },
+    "sex": {
+      "options": {
+        "unknown": "Unknown",
+        "female": "Female",
+        "male": "Male",
+        "probably_female": "Probably female",
+        "probably_male": "Probably male",
+        "mixed": "Mixed"
+      }
+    },
+    "stage": {
+      "options": {
+        "egg": "Egg",
+        "nymph": "Nymph",
+        "larva": "Larva",
+        "pupa": "Pupa",
+        "juvenile": "Juvenile",
+        "subadult": "Subadult",
+        "adult": "Adult"
+      }
+    },
+    "origin": {
+      "options": {
+        "bred": "Own breeding",
+        "bought": "Bought",
+        "wild_caught": "Wild caught",
+        "gift": "Gift",
+        "unknown": "Unknown"
+      }
+    },
+    "feeding_result": {
+      "options": {
+        "accepted": "Accepted",
+        "partial": "Partially eaten",
+        "refused": "Refused"
+      }
+    },
+    "task_kind": {
+      "options": {
+        "feeding": "Feeding",
+        "cleaning": "Cleaning",
+        "substrate_change": "Substrate change",
+        "water_change": "Water change"
+      }
+    },
+    "light_mode": {
+      "options": {
+        "fixed": "Fixed hours (day length from caresheet)",
+        "sun": "Follow the sun (sunrise to sunset)"
+      }
+    },
+    "season_mode": {
+      "options": {
+        "auto": "Automatic (by month)",
+        "normal": "Normal",
+        "winter": "Winter / diapause",
+        "breeding": "Breeding"
+      }
+    },
+    "entry_type": {
+      "options": {
+        "feeding": "Fed",
+        "feeding_refused": "Food refused",
+        "water_refill": "Water refilled",
+        "remove_leftovers": "Leftovers removed",
+        "plant_food": "Food plants replaced",
+        "supplement": "Supplement given",
+        "spot_clean": "Spot clean",
+        "full_clean": "Full clean",
+        "substrate_change": "Substrate changed",
+        "substrate_moisten": "Substrate moistened",
+        "pest_check": "Mold/mite/pest check",
+        "misting_manual": "Misted",
+        "climate_adjust": "Climate adjusted",
+        "water_change": "Water change",
+        "water_test": "Water test",
+        "filter_clean": "Filter cleaned",
+        "premolt_observed": "Premolt observed",
+        "molt": "Molt",
+        "molt_problem": "Molt problem",
+        "pupation": "Pupation",
+        "eclosion": "Eclosion",
+        "stage_change": "Stage changed",
+        "diapause_start": "Diapause started",
+        "diapause_end": "Diapause ended",
+        "pairing": "Pairing",
+        "egg_sac": "Egg sac",
+        "ootheca": "Ootheca",
+        "egg_laying": "Eggs laid",
+        "brood_pulled": "Brood pulled",
+        "hatch": "Hatched",
+        "split_colony": "Colony split",
+        "measurement": "Measurement",
+        "count": "Count",
+        "observation": "Observation",
+        "health_issue": "Health issue",
+        "treatment": "Treatment",
+        "death": "Death",
+        "rehouse": "Rehoused",
+        "escape": "Escaped",
+        "recaptured": "Recaptured",
+        "acquired": "Acquired",
+        "sold": "Sold",
+        "given_away": "Given away",
+        "released": "Released",
+        "document_added": "Document added",
+        "note": "Note"
+      }
+    }
+  },
+  "issues": {
+    "range_conflict": {
+      "title": "Climate conflict at {actuator}",
+      "description": "The animals {animals} share {actuator}, but their target ranges do not overlap. The controller now uses the average. Move them to separate enclosures, link a different actuator or adjust the caresheets."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "status": {
+        "name": "Status",
+        "state": {
+          "ok": "OK",
+          "problem": "Problem",
+          "inactive": "Inactive"
+        },
+        "state_attributes": {
+          "problems": {
+            "name": "Problems"
+          }
+        }
+      },
+      "temperature": {
+        "name": "Temperature"
+      },
+      "humidity": {
+        "name": "Humidity"
+      },
+      "water_temperature": {
+        "name": "Water temperature"
+      },
+      "stage": {
+        "name": "Life stage",
+        "state": {
+          "egg": "Egg",
+          "nymph": "Nymph",
+          "larva": "Larva",
+          "pupa": "Pupa",
+          "juvenile": "Juvenile",
+          "subadult": "Subadult",
+          "adult": "Adult"
+        }
+      },
+      "instar": {
+        "name": "Instar"
+      },
+      "molt_count": {
+        "name": "Molt count"
+      },
+      "colony_count": {
+        "name": "Colony size"
+      },
+      "days_since_feeding": {
+        "name": "Days since feeding"
+      },
+      "days_since_molt": {
+        "name": "Days since molt"
+      },
+      "days_since_cleaning": {
+        "name": "Days since cleaning"
+      },
+      "days_since_substrate_change": {
+        "name": "Days since substrate change"
+      },
+      "days_since_water_change": {
+        "name": "Days since water change"
+      },
+      "next_feeding": {
+        "name": "Next feeding"
+      },
+      "length": {
+        "name": "Body length"
+      },
+      "legspan": {
+        "name": "Leg span"
+      },
+      "weight": {
+        "name": "Weight"
+      },
+      "target_temperature_min": {
+        "name": "Target temperature min"
+      },
+      "target_temperature_max": {
+        "name": "Target temperature max"
+      },
+      "target_humidity_min": {
+        "name": "Target humidity min"
+      },
+      "target_humidity_max": {
+        "name": "Target humidity max"
+      },
+      "open_tasks": {
+        "name": "Open tasks"
+      },
+      "low_stock": {
+        "name": "Low stock"
+      },
+      "animals_with_problems": {
+        "name": "Animals with a problem"
+      },
+      "climate_control_status": {
+        "name": "Climate control status",
+        "state": {
+          "active": "Active",
+          "paused": "Paused",
+          "monitoring": "Monitoring only",
+          "maintenance": "Maintenance"
+        }
+      }
+    },
+    "todo": {
+      "maintenance": {
+        "name": "Maintenance"
+      }
+    },
+    "calendar": {
+      "calendar": {
+        "name": "Calendar"
+      }
+    },
+    "image": {
+      "photo": {
+        "name": "Photo"
+      }
+    },
+    "switch": {
+      "climate_control": {
+        "name": "Climate control"
+      },
+      "maintenance": {
+        "name": "Maintenance mode"
+      }
+    },
+    "binary_sensor": {
+      "problem": {
+        "name": "Problem"
+      },
+      "climate_out_of_range": {
+        "name": "Climate out of range"
+      },
+      "feeding_overdue": {
+        "name": "Feeding overdue"
+      },
+      "premolt": {
+        "name": "Premolt"
+      }
+    },
+    "select": {
+      "season_mode": {
+        "name": "Season profile",
+        "state": {
+          "auto": "Automatic (by month)",
+          "normal": "Normal",
+          "winter": "Winter / diapause",
+          "breeding": "Breeding"
+        }
+      },
+      "stage_select": {
+        "name": "Set life stage",
+        "state": {
+          "egg": "Egg",
+          "nymph": "Nymph",
+          "larva": "Larva",
+          "pupa": "Pupa",
+          "juvenile": "Juvenile",
+          "subadult": "Subadult",
+          "adult": "Adult"
+        }
+      }
+    },
+    "button": {
+      "log_feeding": {
+        "name": "Fed"
+      },
+      "log_misting": {
+        "name": "Misted"
+      },
+      "log_spot_clean": {
+        "name": "Spot cleaned"
+      },
+      "log_water_refill": {
+        "name": "Water refilled"
+      }
+    }
+  },
+  "exceptions": {
+    "not_loaded": {
+      "message": "Arthropoda Keeper is not loaded."
+    },
+    "unknown_animal": {
+      "message": "{device} is not an Arthropoda animal."
+    },
+    "invalid_entry": {
+      "message": "Invalid journal entry: {error}"
+    },
+    "path_outside_config": {
+      "message": "The file must be inside the config folder."
+    },
+    "no_caresheet": {
+      "message": "Provide YAML text or a file."
+    },
+    "invalid_caresheet": {
+      "message": "Invalid caresheet: {error}"
+    },
+    "unknown_task": {
+      "message": "This task does not exist (anymore)."
+    },
+    "no_values": {
+      "message": "Provide at least one value."
+    }
+  },
+  "services": {
+    "log_entry": {
+      "name": "Add journal entry",
+      "description": "Add an action to the journal.",
+      "fields": {
+        "animal": {
+          "name": "Animal(s)",
+          "description": "One or more animals or colonies."
+        },
+        "timestamp": {
+          "name": "Timestamp",
+          "description": "Default: now."
+        },
+        "notes": {
+          "name": "Notes",
+          "description": "Free text."
+        },
+        "type": {
+          "name": "Action",
+          "description": "Type of action."
+        },
+        "data": {
+          "name": "Extra data",
+          "description": "Optional fields, e.g. {stage: adult} or {length_mm: 30}."
+        }
+      }
+    },
+    "log_feeding": {
+      "name": "Log feeding",
+      "description": "Log a feeding.",
+      "fields": {
+        "animal": {
+          "name": "Animal(s)",
+          "description": "One or more animals or colonies."
+        },
+        "timestamp": {
+          "name": "Timestamp",
+          "description": "Default: now."
+        },
+        "notes": {
+          "name": "Notes",
+          "description": "Free text."
+        },
+        "prey": {
+          "name": "Prey/food",
+          "description": "E.g. cricket, Dubia, fruit fly."
+        },
+        "quantity": {
+          "name": "Quantity",
+          "description": "Number of prey items."
+        },
+        "prey_size": {
+          "name": "Prey size",
+          "description": "E.g. L3, subadult, 1 cm."
+        },
+        "plants": {
+          "name": "Food plants",
+          "description": "Plants from the plant monitor that you fed."
+        },
+        "result": {
+          "name": "Result",
+          "description": "A refused feeding does not reset the counter."
+        }
+      }
+    },
+    "log_molt": {
+      "name": "Log molt",
+      "description": "Log a molt: instar +1, premolt off, feeding pause starts.",
+      "fields": {
+        "animal": {
+          "name": "Animal(s)",
+          "description": "One or more animals or colonies."
+        },
+        "timestamp": {
+          "name": "Timestamp",
+          "description": "Default: now."
+        },
+        "notes": {
+          "name": "Notes",
+          "description": "Free text."
+        },
+        "complete": {
+          "name": "Successful",
+          "description": "Off = molt problem (instar not changed)."
+        },
+        "instar_after": {
+          "name": "Instar after molt",
+          "description": "Empty = current +1."
+        },
+        "sex": {
+          "name": "Sex (exuvia)",
+          "description": "Sex determined from the exuvia."
+        },
+        "exuvia_kept": {
+          "name": "Exuvia kept",
+          "description": "Molt skin kept."
+        },
+        "legspan_mm": {
+          "name": "Leg span",
+          "description": "Leg span in mm."
+        },
+        "length_mm": {
+          "name": "Body length",
+          "description": "Body length in mm."
+        }
+      }
+    },
+    "add_measurement": {
+      "name": "Add measurement",
+      "description": "Log length, leg span, weight or count.",
+      "fields": {
+        "animal": {
+          "name": "Animal(s)",
+          "description": "One or more animals or colonies."
+        },
+        "timestamp": {
+          "name": "Timestamp",
+          "description": "Default: now."
+        },
+        "notes": {
+          "name": "Notes",
+          "description": "Free text."
+        },
+        "length_mm": {
+          "name": "Body length",
+          "description": "Body length in mm."
+        },
+        "legspan_mm": {
+          "name": "Leg span",
+          "description": "Leg span in mm."
+        },
+        "weight_g": {
+          "name": "Weight",
+          "description": "Weight in grams."
+        },
+        "count": {
+          "name": "Count",
+          "description": "Counted number of animals (colony)."
+        }
+      }
+    },
+    "set_stage": {
+      "name": "Set life stage",
+      "description": "Change life stage and instar (logged in the journal).",
+      "fields": {
+        "animal": {
+          "name": "Animal(s)",
+          "description": "One or more animals or colonies."
+        },
+        "timestamp": {
+          "name": "Timestamp",
+          "description": "Default: now."
+        },
+        "notes": {
+          "name": "Notes",
+          "description": "Free text."
+        },
+        "stage": {
+          "name": "Life stage",
+          "description": "New life stage."
+        },
+        "instar": {
+          "name": "Instar",
+          "description": "Optional instar number."
+        }
+      }
+    },
+    "get_journal": {
+      "name": "Get journal",
+      "description": "Returns the most recent journal entries.",
+      "fields": {
+        "animal": {
+          "name": "Animal",
+          "description": "Empty = all animals."
+        },
+        "type": {
+          "name": "Action",
+          "description": "Only this type (e.g. molt)."
+        },
+        "limit": {
+          "name": "Limit",
+          "description": "Maximum number of entries."
+        }
+      }
+    },
+    "import_caresheet": {
+      "name": "Import caresheet",
+      "description": "Import species from YAML (text or file in /config).",
+      "fields": {
+        "yaml": {
+          "name": "YAML",
+          "description": "Caresheet text in the arthropoda format."
+        },
+        "path": {
+          "name": "File",
+          "description": "Path relative to the config folder."
+        },
+        "overwrite": {
+          "name": "Overwrite",
+          "description": "Replace existing species."
+        }
+      }
+    },
+    "export_species": {
+      "name": "Export species",
+      "description": "Export species as caresheet YAML.",
+      "fields": {
+        "species": {
+          "name": "Species",
+          "description": "Scientific names; empty = all."
+        },
+        "path": {
+          "name": "File",
+          "description": "Optional: also write to this file in /config."
+        }
+      }
+    },
+    "send_digest": {
+      "name": "Send summary now",
+      "description": "Sends the daily summary right away (useful for testing)."
+    },
+    "snooze_task": {
+      "name": "Snooze task",
+      "description": "Postpone a maintenance task by a number of days.",
+      "fields": {
+        "animal": {
+          "name": "Animal",
+          "description": "The animal."
+        },
+        "task": {
+          "name": "Task",
+          "description": "Which task."
+        },
+        "days": {
+          "name": "Days",
+          "description": "Postpone until the start of the day in this many days."
+        }
+      }
+    },
+    "list_species": {
+      "name": "List species",
+      "description": "Returns all species in the database."
+    }
+  }
+}

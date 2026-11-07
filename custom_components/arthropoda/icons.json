@@ -1,0 +1,182 @@
+{
+  "entity": {
+    "sensor": {
+      "status": {
+        "default": "mdi:spider",
+        "state": {
+          "ok": "mdi:check-circle-outline",
+          "problem": "mdi:alert-circle",
+          "inactive": "mdi:sleep"
+        }
+      },
+      "stage": {
+        "default": "mdi:stairs-up"
+      },
+      "instar": {
+        "default": "mdi:numeric"
+      },
+      "molt_count": {
+        "default": "mdi:layers-triple-outline"
+      },
+      "colony_count": {
+        "default": "mdi:bug-outline"
+      },
+      "days_since_feeding": {
+        "default": "mdi:food-drumstick-outline"
+      },
+      "days_since_molt": {
+        "default": "mdi:layers-outline"
+      },
+      "days_since_cleaning": {
+        "default": "mdi:broom"
+      },
+      "days_since_substrate_change": {
+        "default": "mdi:shovel"
+      },
+      "days_since_water_change": {
+        "default": "mdi:water-sync"
+      },
+      "next_feeding": {
+        "default": "mdi:calendar-clock"
+      },
+      "length": {
+        "default": "mdi:ruler"
+      },
+      "legspan": {
+        "default": "mdi:arrow-expand-horizontal"
+      },
+      "weight": {
+        "default": "mdi:scale"
+      },
+      "target_temperature_min": {
+        "default": "mdi:thermometer-low"
+      },
+      "target_temperature_max": {
+        "default": "mdi:thermometer-high"
+      },
+      "target_humidity_min": {
+        "default": "mdi:water-percent"
+      },
+      "target_humidity_max": {
+        "default": "mdi:water-percent"
+      },
+      "climate_control_status": {
+        "default": "mdi:thermostat-auto",
+        "state": {
+          "maintenance": "mdi:wrench",
+          "paused": "mdi:pause-circle-outline",
+          "monitoring": "mdi:eye-outline"
+        }
+      },
+      "open_tasks": {
+        "default": "mdi:clipboard-check-outline"
+      },
+      "animals_with_problems": {
+        "default": "mdi:alert-outline"
+      },
+      "low_stock": {
+        "default": "mdi:package-variant-closed-remove"
+      }
+    },
+    "binary_sensor": {
+      "feeding_overdue": {
+        "default": "mdi:food-off-outline",
+        "state": {
+          "on": "mdi:food-alert"
+        }
+      },
+      "premolt": {
+        "default": "mdi:layers-outline",
+        "state": {
+          "on": "mdi:layers-plus"
+        }
+      }
+    },
+    "select": {
+      "season_mode": {
+        "default": "mdi:weather-snowy-heavy"
+      },
+      "stage_select": {
+        "default": "mdi:stairs-up"
+      }
+    },
+    "button": {
+      "log_feeding": {
+        "default": "mdi:food-drumstick"
+      },
+      "log_misting": {
+        "default": "mdi:spray"
+      },
+      "log_spot_clean": {
+        "default": "mdi:broom"
+      },
+      "log_water_refill": {
+        "default": "mdi:cup-water"
+      }
+    },
+    "switch": {
+      "climate_control": {
+        "default": "mdi:thermostat-auto",
+        "state": {
+          "off": "mdi:thermostat-box"
+        }
+      },
+      "maintenance": {
+        "default": "mdi:wrench-outline",
+        "state": {
+          "on": "mdi:wrench"
+        }
+      }
+    },
+    "todo": {
+      "maintenance": {
+        "default": "mdi:clipboard-list-outline"
+      }
+    },
+    "calendar": {
+      "calendar": {
+        "default": "mdi:calendar-month"
+      }
+    },
+    "image": {
+      "photo": {
+        "default": "mdi:image-outline"
+      }
+    }
+  },
+  "services": {
+    "log_entry": {
+      "service": "mdi:notebook-edit-outline"
+    },
+    "log_feeding": {
+      "service": "mdi:food-drumstick"
+    },
+    "log_molt": {
+      "service": "mdi:layers-outline"
+    },
+    "add_measurement": {
+      "service": "mdi:ruler"
+    },
+    "set_stage": {
+      "service": "mdi:stairs-up"
+    },
+    "get_journal": {
+      "service": "mdi:notebook-outline"
+    },
+    "import_caresheet": {
+      "service": "mdi:file-import-outline"
+    },
+    "export_species": {
+      "service": "mdi:file-export-outline"
+    },
+    "list_species": {
+      "service": "mdi:format-list-bulleted"
+    },
+    "send_digest": {
+      "service": "mdi:email-fast-outline"
+    },
+    "snooze_task": {
+      "service": "mdi:alarm-snooze"
+    }
+  }
+}
