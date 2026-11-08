@@ -39,6 +39,8 @@ class MaintenanceTodoList(HubEntity, TodoListEntity):
 
     def _summary(self, task: Task) -> str:
         t = texts(self.hass.config.language)
+        if task.enclosure_id is not None:
+            return f"{t[task.kind]}: {self.coordinator.task_target_name(task)}"
         snap = self.coordinator.data[task.animal_id]
         species = snap.bundle.species
         name = snap.animal.name
@@ -62,7 +64,7 @@ class MaintenanceTodoList(HubEntity, TodoListEntity):
                 description=self._description(task),
             )
             for task in self.coordinator.due_tasks()
-            if task.animal_id in self.coordinator.data
+            if task.enclosure_id is not None or task.animal_id in self.coordinator.data
         ]
 
     def _task(self, uid: str | None) -> Task:
@@ -74,12 +76,10 @@ class MaintenanceTodoList(HubEntity, TodoListEntity):
     async def async_update_todo_item(self, item: TodoItem) -> None:
         task = self._task(item.uid)
         if item.status == TodoItemStatus.COMPLETED:
-            await self.coordinator.async_log(
-                [task.animal_id], task.journal_type, data={"source": "todo"}
-            )
+            await self.coordinator.async_complete_task(task)
 
     async def async_delete_todo_items(self, uids: list[str]) -> None:
         tomorrow = dt_util.start_of_local_day() + timedelta(days=1)
         for uid in uids:
             task = self._task(uid)
-            await self.coordinator.async_snooze(task.animal_id, task.kind, tomorrow)
+            await self.coordinator.async_snooze_task(task, tomorrow)

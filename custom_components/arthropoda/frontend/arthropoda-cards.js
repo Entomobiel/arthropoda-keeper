@@ -113,9 +113,9 @@ class ArthropodaAnimalCard extends BaseCard {
         </div>
         <span class="chip ${a.state}" title="${esc(a.problems.join(", "))}"><span class="dot ${a.state}"></span>${esc(chipLabel)}</span>
       </div>
-      ${a.config.temperature_sensors?.length ? metric(t(h, "temperature"), r.temperature, a.targets.temperature, "°C") : ""}
-      ${a.config.humidity_sensor ? metric(t(h, "humidity"), r.humidity, a.targets.humidity, "%") : ""}
-      ${a.config.water_temperature_sensor ? metric(t(h, "water_temperature"), r.water_temperature, a.targets.water_temperature, "°C") : ""}
+      ${(a.climate_config || a.config).temperature_sensors?.length ? metric(t(h, "temperature"), r.temperature, a.targets.temperature, "°C") : ""}
+      ${(a.climate_config || a.config).humidity_sensor ? metric(t(h, "humidity"), r.humidity, a.targets.humidity, "%") : ""}
+      ${(a.climate_config || a.config).water_temperature_sensor ? metric(t(h, "water_temperature"), r.water_temperature, a.targets.water_temperature, "°C") : ""}
       <div class="facts">
         <div><span>${esc(t(h, "stage"))}</span><span>${esc(stageText(store, a) || "–")}${a.premolt ? ` · ${esc(t(h, "premolt"))}` : ""}</span></div>
         <div><span>${esc(t(h, "feeding"))}</span><span>${esc(daysText(h, a.days_since.feeding))}</span></div>

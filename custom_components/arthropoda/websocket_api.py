@@ -29,6 +29,7 @@ from homeassistant.util import dt as dt_util
 from .ai_import import ImportFailed, ai_entities, async_extract, async_inat_photos
 from .caresheet import CaresheetError, dump_documents, parse_caresheets
 from .http_views import document_dir, photo_dir
+from .nfc import EVENT_TAG_SCANNED, deep_link
 from .const import (
     ACTUATOR_KEYS,
     CONF_COUNT,
@@ -183,7 +184,11 @@ def serialize_animals(hass: HomeAssistant) -> list[dict[str, Any]]:
                         r.as_dict() for r in controller.results.values() if animal_id in r.members
                     ],
                 },
-                "config": dict(snap.config),
+                # Eigen configuratie (voor het wijzigformulier) en het klimaat dat
+                # echt gebruikt wordt (eventueel dat van de kast).
+                "config": dict(coordinator.animal_configs.get(animal_id, {})),
+                "climate_config": dict(snap.config),
+                "enclosure_id": animal.enclosure_id,
                 "device_id": status_entry.device_id if status_entry else None,
                 "entities": entities,
             }
@@ -208,6 +213,49 @@ def serialize_animals(hass: HomeAssistant) -> list[dict[str, Any]]:
     return animals
 
 
+def serialize_enclosures(hass: HomeAssistant) -> list[dict[str, Any]]:
+    """Alle kasten met bewoners, taken en klimaat (voor paneel en werkscherm)."""
+    _, runtime = _runtime(hass)
+    if runtime is None:
+        return []
+    coordinator = runtime.coordinator
+    data = coordinator.data or {}
+    tasks_by_enc: dict[int, list[dict[str, Any]]] = {}
+    for task in coordinator.enclosure_tasks:
+        tasks_by_enc.setdefault(task.enclosure_id, []).append(
+            {"uid": task.uid, "kind": task.kind, "due": _iso(task.due), "label": task.label}
+        )
+    result = []
+    for enc_id, enc in sorted(coordinator.enclosures.items(), key=lambda kv: kv[1]["code"].lower()):
+        residents = coordinator.residents(enc_id, monitored_only=False)
+        active = [a for a in residents if a in data and data[a].monitored]
+        snap = data.get(active[0]) if active else None
+        result.append(
+            {
+                **{k: v for k, v in enc.items() if k != "config"},
+                "config": {k: v for k, v in (enc.get("config") or {}).items() if k != "snooze"},
+                "residents": active,
+                "former_residents": [a for a in residents if a not in active],
+                "empty": not active,
+                "tasks": sorted(tasks_by_enc.get(enc_id, []), key=lambda t: t["due"]),
+                "too_small_for": [
+                    data[a].animal.name for a in active if "enclosure_too_small" in data[a].problems
+                ],
+                "readings": (
+                    {
+                        "temperature": snap.readings.temperature,
+                        "humidity": snap.readings.humidity,
+                        "water_temperature": snap.readings.water_temperature,
+                    }
+                    if snap and snap.config.get("climate_from_enclosure") == enc_id
+                    else None
+                ),
+                "link": deep_link(enc["code"]),
+            }
+        )
+    return result
+
+
 def _error(connection, msg, code: str, message: str) -> None:
     connection.send_error(msg["id"], code, message)
 
@@ -230,7 +278,10 @@ def ws_subscribe(hass: HomeAssistant, connection, msg) -> None:
     @callback
     def push() -> None:
         connection.send_message(
-            websocket_api.event_message(msg["id"], {"animals": serialize_animals(hass)})
+            websocket_api.event_message(
+                msg["id"],
+                {"animals": serialize_animals(hass), "enclosures": serialize_enclosures(hass)},
+            )
         )
 
     connection.subscriptions[msg["id"]] = async_dispatcher_connect(hass, SIGNAL_UPDATE, push)
@@ -867,9 +918,192 @@ async def ws_species_photo_auto_all(hass: HomeAssistant, connection, msg) -> Non
     connection.send_result(msg["id"], {"searched": len(missing), "found": found})
 
 
+# --- kasten (fase 7) -----------------------------------------------------------
+
+ENCLOSURE_SCHEMA = vol.Schema(
+    {
+        vol.Optional("id"): vol.Any(int, None),
+        vol.Required("code"): vol.All(str, vol.Strip, vol.Length(min=1, max=20)),
+        vol.Optional("name"): vol.Any(str, None),
+        vol.Optional("type"): vol.Any(str, None),
+        vol.Optional("length_cm"): vol.Any(int, float, None),
+        vol.Optional("width_cm"): vol.Any(int, float, None),
+        vol.Optional("height_cm"): vol.Any(int, float, None),
+        vol.Optional("material"): vol.Any(str, None),
+        vol.Optional("ventilation"): vol.Any(str, None),
+        vol.Optional("location"): vol.Any(str, None),
+        vol.Optional("acquired_at"): vol.Any(str, None),
+        vol.Optional("price"): vol.Any(int, float, None),
+        vol.Optional("seller"): vol.Any(str, None),
+        vol.Optional("status"): vol.Any(str, None),
+        vol.Optional("nfc_tag"): vol.Any(str, None),
+        vol.Optional("notes"): vol.Any(str, None),
+        vol.Optional("config"): dict,
+        vol.Optional("equipment"): [
+            vol.Schema(
+                {
+                    vol.Optional("name"): vol.Any(str, None),
+                    vol.Optional("type"): vol.Any(str, None),
+                    vol.Optional("interval_days"): vol.Any(int, float, None),
+                    vol.Optional("serviced_at"): vol.Any(str, None),
+                    vol.Optional("notes"): vol.Any(str, None),
+                },
+                extra=vol.REMOVE_EXTRA,
+            )
+        ],
+    },
+    extra=vol.REMOVE_EXTRA,
+)
+
+
+@websocket_api.websocket_command({vol.Required("type"): "arthropoda/enclosures/list"})
+@callback
+def ws_enclosures_list(hass: HomeAssistant, connection, msg) -> None:
+    connection.send_result(msg["id"], {"enclosures": serialize_enclosures(hass)})
+
+
+@websocket_api.websocket_command(
+    {vol.Required("type"): "arthropoda/enclosure/save", vol.Required("item"): ENCLOSURE_SCHEMA}
+)
+@websocket_api.async_response
+async def ws_enclosure_save(hass: HomeAssistant, connection, msg) -> None:
+    _, runtime = _require(hass, connection, msg)
+    if runtime is None:
+        return
+    item = {k: (None if v == "" else v) for k, v in msg["item"].items()}
+    if item.get("config") is not None:
+        # Alleen klimaatvelden; lege waarden weglaten; snooze behouden.
+        old = runtime.coordinator.enclosures.get(item.get("id") or -1, {}).get("config") or {}
+        cfg = _clean_animal_data(item["config"])
+        cfg = {k: v for k, v in cfg.items() if k in (*SENSOR_KEYS, *ACTUATOR_KEYS, *TUNING_KEYS)}
+        if old.get("snooze"):
+            cfg["snooze"] = old["snooze"]
+        item["config"] = cfg
+    elif item.get("id") in runtime.coordinator.enclosures:
+        item["config"] = runtime.coordinator.enclosures[item["id"]].get("config") or {}
+    if item.get("equipment") is None and item.get("id") in runtime.coordinator.enclosures:
+        item["equipment"] = runtime.coordinator.enclosures[item["id"]].get("equipment") or []
+    try:
+        enc_id = await hass.async_add_executor_job(runtime.db.save_enclosure, item)
+    except (ValueError, KeyError) as err:
+        _error(connection, msg, "invalid", str(err))
+        return
+    await runtime.coordinator.async_refresh()
+    connection.send_result(msg["id"], {"id": enc_id})
+
+
+@websocket_api.websocket_command(
+    {vol.Required("type"): "arthropoda/enclosure/delete", vol.Required("enclosure_id"): int}
+)
+@websocket_api.async_response
+async def ws_enclosure_delete(hass: HomeAssistant, connection, msg) -> None:
+    _, runtime = _require(hass, connection, msg)
+    if runtime is None:
+        return
+    await hass.async_add_executor_job(runtime.db.delete_enclosure, msg["enclosure_id"])
+    await runtime.coordinator.async_refresh()
+    connection.send_result(msg["id"])
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "arthropoda/enclosure/assign",
+        vol.Required("animal_id"): str,
+        vol.Required("enclosure_id"): vol.Any(int, None),
+    }
+)
+@websocket_api.async_response
+async def ws_enclosure_assign(hass: HomeAssistant, connection, msg) -> None:
+    _, runtime = _require(hass, connection, msg)
+    if runtime is None:
+        return
+    if msg["enclosure_id"] is not None and msg["enclosure_id"] not in runtime.coordinator.enclosures:
+        _error(connection, msg, "not_found", "Onbekende kast")
+        return
+    try:
+        await runtime.coordinator.async_assign(msg["animal_id"], msg["enclosure_id"])
+    except KeyError:
+        _error(connection, msg, "not_found", "Onbekend dier")
+        return
+    connection.send_result(msg["id"])
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "arthropoda/enclosure/log",
+        vol.Required("enclosure_id"): int,
+        vol.Required("entry_type"): vol.In(list(ENTRY_TYPES)),
+        vol.Optional("animal_ids"): [str],
+        vol.Optional("notes"): vol.Any(str, None),
+        vol.Optional("data", default={}): dict,
+    }
+)
+@websocket_api.async_response
+async def ws_enclosure_log(hass: HomeAssistant, connection, msg) -> None:
+    """Handeling in een kast; standaard voor alle bewoners."""
+    _, runtime = _require(hass, connection, msg)
+    if runtime is None:
+        return
+    residents = runtime.coordinator.residents(msg["enclosure_id"])
+    ids = [a for a in msg.get("animal_ids") or residents if a in residents]
+    if not ids:
+        _error(connection, msg, "invalid", "Deze kast heeft geen (gekozen) bewoners.")
+        return
+    try:
+        entry_ids = await runtime.coordinator.async_log(
+            ids, msg["entry_type"], None, msg.get("notes") or None,
+            {**msg["data"], "enclosure_id": msg["enclosure_id"]},
+        )
+    except ValueError as err:
+        _error(connection, msg, "invalid", str(err))
+        return
+    connection.send_result(msg["id"], {"entry_ids": entry_ids, "animals": ids})
+
+
+@websocket_api.websocket_command(
+    {vol.Required("type"): "arthropoda/task/done", vol.Required("uid"): str}
+)
+@websocket_api.async_response
+async def ws_task_done(hass: HomeAssistant, connection, msg) -> None:
+    """Taak afvinken (dier of kast), zoals in de takenlijst."""
+    _, runtime = _require(hass, connection, msg)
+    if runtime is None:
+        return
+    task = next((t for t in runtime.coordinator.all_tasks() if t.uid == msg["uid"]), None)
+    if task is None:
+        _error(connection, msg, "not_found", "Deze taak bestaat niet (meer).")
+        return
+    await runtime.coordinator.async_complete_task(task)
+    connection.send_result(msg["id"])
+
+
+@websocket_api.websocket_command({vol.Required("type"): "arthropoda/nfc/listen"})
+@callback
+def ws_nfc_listen(hass: HomeAssistant, connection, msg) -> None:
+    """Wacht op de eerstvolgende gescande NFC-tag (om hem aan een kast te koppelen)."""
+
+    @callback
+    def _scanned(event) -> None:
+        connection.send_message(
+            websocket_api.event_message(
+                msg["id"], {"tag_id": event.data.get("tag_id"), "device_id": event.data.get("device_id")}
+            )
+        )
+
+    connection.subscriptions[msg["id"]] = hass.bus.async_listen(EVENT_TAG_SCANNED, _scanned)
+    connection.send_result(msg["id"])
+
+
 @callback
 def async_register_websocket(hass: HomeAssistant) -> None:
     for command in (
+        ws_enclosures_list,
+        ws_enclosure_save,
+        ws_enclosure_delete,
+        ws_enclosure_assign,
+        ws_enclosure_log,
+        ws_task_done,
+        ws_nfc_listen,
         ws_breeding_list,
         ws_brood_update,
         ws_stock_list,

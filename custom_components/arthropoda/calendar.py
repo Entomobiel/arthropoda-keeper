@@ -63,16 +63,16 @@ class ArthropodaCalendar(HubEntity, CalendarEntity):
 
         today_start = dt_util.start_of_local_day()
         for task in self.coordinator.all_tasks():
-            snap = data.get(task.animal_id)
-            if snap is None:
+            if task.enclosure_id is None and task.animal_id not in data:
                 continue
+            name = self.coordinator.task_target_name(task)
             # Achterstallige taken staan op vandaag; de volgende rekenen vanaf daar.
             current = replace(task, due=max(task.due, today_start))
             for due in project(current, end):
                 day = dt_util.as_local(due).date()
                 if start_day <= day < end_day:
                     events.append(_all_day(
-                        day, f"{t[task.kind]}: {snap.animal.name}", f"{task.uid}:{day.isoformat()}"
+                        day, f"{t[task.kind]}: {name}", f"{task.uid}:{day.isoformat()}"
                     ))
 
         for animal_id, snap in data.items():

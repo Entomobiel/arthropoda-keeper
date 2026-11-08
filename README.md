@@ -2,7 +2,7 @@
 
 Home Assistant-integratie voor het houden van insecten, spinnen, schorpioenen, pissebedden en andere geleedpotigen, inclusief waterinsecten. Elk dier of elke kolonie wordt een eigen apparaat met klimaatbewaking, tellers en een dagboek, vergelijkbaar met de plant monitor.
 
-> **Status: fase 6 – alle geplande functies aanwezig** (kern, klimaat, opvolging, paneel/kaarten, AI-caresheets, foto's, kweek, voorraad, documenten). Zie [docs/ONTWERP.md](docs/ONTWERP.md).
+> **Status: versie 0.7** – kern, klimaat, opvolging, paneel/kaarten, AI-caresheets, foto's, kweek, voorraad, documenten, diapauze, kasten met NFC/QR. Zie [docs/ONTWERP.md](docs/ONTWERP.md).
 
 ## Kweek, voorraad, groei en documenten (fase 6)
 
@@ -27,6 +27,54 @@ Home Assistant-integratie voor het houden van insecten, spinnen, schorpioenen, p
   - documenten die binnen 30 dagen vervallen, staan in de kalender en in de samenvatting;
   - bestanden staan in `/config/arthropoda/documents` en gaan mee in je back-ups.
 - **Soortfoto's voor bestaande soorten:** *Soorten → 🖼 Foto's voor alle soorten zonder foto*.
+
+## Kasten, NFC en QR-codes (fase 7)
+
+> Bij de eerste start na de update wordt de database uitgebreid naar versie 3. Er wordt alleen iets toegevoegd, en vooraf komt er een reservekopie (`arthropoda.db.bak-v2`).
+
+**Kasten** (tab *Kasten*): per terrarium, faunabox, kweekbak, formicarium, … leg je vast:
+- code en naam;
+- type, afmetingen (de inhoud wordt berekend), materiaal, ventilatie en plaats;
+- aankoop en prijs;
+- status (in gebruik, leeg, onderhoud).
+
+**Bewoners** wijs je toe in het kastformulier of in *Wijzigen* van een dier. Een verhuizing komt automatisch in het dagboek.
+
+**Klimaat per kast:**
+- Koppel sensoren en toestellen aan de kast (bv. de sensoren van je Raspberry Pi Pico W, zodra ze als entiteiten in HA staan via ESPHome of MQTT). Ze gelden dan voor alle bewoners.
+- Gedeelde toestellen worden geregeld op de overlap van de caresheets, zoals in fase 2.
+- De eigen instellingen van een dier blijven bewaard, maar worden niet gebruikt zolang het in een kast met klimaat zit.
+
+**Taken per kast:**
+- Schoonmaken en substraat vervangen worden één taak per kast, in plaats van één per bewoner. Het interval is het kortste uit de caresheets van de bewoners.
+- Voor de **uitrusting** (UV-lamp, verwarmingskabel, filter, vernevelaar, …) geef je een vervang- of reinigingsinterval op. Je krijgt een taak *Onderhoud uitrusting* wanneer het zover is.
+
+**Grootte-check:** staat in de caresheet `enclosure: {min_size_cm: [lengte, breedte, hoogte]}`, dan waarschuwt de integratie als een bewoner in een te kleine kast zit.
+
+**Werkscherm** (`/arthropoda?enclosure=CODE`), gemaakt voor je gsm:
+- de bewoners met foto (tik om ze aan of uit te vinken);
+- grote knoppen: *Gevoederd, Gesproeid, Schoongemaakt, Water, Voedselplant, Substraat, Notitie, Foto, Meer…*;
+- de taken van vandaag om af te vinken;
+- het klimaat en de laatste handelingen.
+
+Alles komt meteen in het dagboek.
+
+**NFC-tags** (aanbevolen: waterdichte NTAG215/216-stickers):
+1. Schrijf een tag met de HA-app: *Instellingen → Companion-app → NFC-tags → Tag schrijven*.
+2. Klik in het paneel bij de kast op **📶 NFC-tag** en scan de tag één keer.
+3. Voortaan: scan de tag, tik op de melding en het werkscherm opent.
+
+Op Android kan het in één stap: schrijf met de app *NFC Tools* de link die het NFC-venster toont (`homeassistant://navigate/arthropoda?enclosure=CODE`) op de tag.
+Bij elke scan vuurt ook de gebeurtenis `arthropoda_enclosure_scanned`, voor eigen automatiseringen.
+
+**QR-etiketten:** *Kasten → 🖨 Etiketten afdrukken* maakt een A4-vel met per kast een QR-code, de code, de naam en de soorten. Je kiest uit 3×8 (63,5 × 38,1 mm), 2×7 (99,1 × 38,1 mm) of 3×7 (70 × 42,3 mm). De QR-code opent de HA-app rechtstreeks op het werkscherm. Gebruik waterbestendige vinylstickers of lamineer de etiketten.
+
+**Verzorgingsronde:**
+1. Klik op *Kasten → 🔁 Ronde starten* en scan daarna kast na kast.
+2. Het werkscherm toont hoeveel kasten je al bezocht hebt.
+3. Met **Ronde afronden** zie je wat er gedaan is, en welke kasten nog open taken hebben die je nog niet bezocht.
+
+**Lege kasten:** filter in de tab *Kasten* op *Leeg*, bv. wanneer er nakomelingen te verdelen zijn.
 
 ## Diapauze en voederdieren
 

@@ -35,6 +35,7 @@ TEXTS = {
         "substrate_change": "Substraat vervangen",
         "water_change": "Waterwissel",
         "diapause_end": "Uit diapauze halen",
+        "equipment": "Onderhoud uitrusting",
         "diapause_window": "Diapauze kan eindigen: {name}",
         "overdue": "{days} dag(en) te laat",
         "due_today": "Vandaag",
@@ -56,6 +57,7 @@ TEXTS = {
         "substrate_change": "Change substrate",
         "water_change": "Water change",
         "diapause_end": "End diapause",
+        "equipment": "Equipment maintenance",
         "diapause_window": "Diapause may end: {name}",
         "overdue": "{days} day(s) overdue",
         "due_today": "Today",
@@ -80,20 +82,26 @@ def texts(language: str | None) -> dict[str, str]:
 
 @dataclass(slots=True, frozen=True)
 class Task:
-    """Een (volgende) onderhoudstaak voor een dier."""
+    """Een (volgende) onderhoudstaak voor een dier of een kast."""
 
     animal_id: str
     kind: str
     due: datetime
     interval_days: float
+    enclosure_id: int | None = None
+    index: int | None = None  # welk toestel (bij kind == "equipment")
+    label: str | None = None  # naam van het toestel
 
     @property
     def uid(self) -> str:
+        if self.enclosure_id is not None:
+            suffix = f":{self.index}" if self.index is not None else ""
+            return f"enc{self.enclosure_id}:{self.kind}{suffix}"
         return f"{self.animal_id}:{self.kind}"
 
     @property
     def journal_type(self) -> str:
-        return TASK_KINDS[self.kind][2]
+        return TASK_KINDS[self.kind][2] if self.kind in TASK_KINDS else ""
 
 
 def compute_tasks(

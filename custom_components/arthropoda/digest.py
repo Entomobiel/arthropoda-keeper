@@ -34,12 +34,11 @@ def build_digest(coordinator: ArthropodaCoordinator, language: str) -> str | Non
     today = dt_util.now().date()
     lines = []
     for task in coordinator.due_tasks():
-        snap = data.get(task.animal_id)
-        if snap is None:
+        if task.enclosure_id is None and task.animal_id not in data:
             continue
         days = (today - dt_util.as_local(task.due).date()).days
         when = t["overdue"].format(days=days) if days > 0 else t["due_today"]
-        lines.append(f"• {t[task.kind]}: {snap.animal.name} ({when.lower()})")
+        lines.append(f"• {t[task.kind]}: {coordinator.task_target_name(task)} ({when.lower()})")
     problems = [snap.animal.name for snap in data.values() if snap.problems]
     if problems:
         lines.append(f"\n{t['digest_problems']}: {', '.join(problems)}")

@@ -201,7 +201,8 @@ class ClimateController:
     def _groups(self) -> dict[tuple[str, str], list[str]]:
         """(rol, entity_id) -> dier-ids, in vaste volgorde."""
         groups: dict[tuple[str, str], list[str]] = {}
-        for animal_id, cfg in sorted(self.coordinator.animal_configs.items()):
+        configs = self.coordinator.effective_configs or self.coordinator.animal_configs
+        for animal_id, cfg in sorted(configs.items()):
             for role in ROLE_ORDER:
                 value = cfg.get(role)
                 if not value:

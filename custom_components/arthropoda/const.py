@@ -17,7 +17,7 @@ SIGNAL_UPDATE = "arthropoda_update"
 # Frontend
 PANEL_URL_PATH = "arthropoda"
 STATIC_URL = "/arthropoda_static"
-FRONTEND_VERSION = "0.6.1"
+FRONTEND_VERSION = "0.7.0"
 
 # --- Soortkenmerken -------------------------------------------------------
 
@@ -188,6 +188,7 @@ PROBLEMS = [
     "feeding_overdue",
     "cleaning_overdue",
     "water_change_overdue",
+    "enclosure_too_small",
 ]
 CLIMATE_PROBLEMS = {
     "temperature_critical",

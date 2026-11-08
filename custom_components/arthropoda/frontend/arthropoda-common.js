@@ -58,6 +58,7 @@ const TEXTS = {
     earliest_end: "Vroegst uit", latest_end: "Uiterlijk uit", feeder: "Voederdier", feeders: "Voederdieren",
     filter_all: "Alle dieren", filter_no_feeders: "Zonder voederdieren", filter_only_feeders: "Alleen voederdieren",
     diapause_end: "Uit diapauze halen",
+    enclosures: "Kasten", enclosure: "Kast", no_enclosure: "— geen kast —",
     breeding: "Kweek", stock: "Voorraad", lineage: "Stamboom", growth: "Groei", documents: "Documenten",
     origin_section: "Herkomst & stamboom", seller: "Kweker / verkoper", price: "Prijs (€)",
     mother_id: "Moeder", father_id: "Vader", generation: "Generatie", partner_id: "Partner (eigen dier)",
@@ -146,6 +147,7 @@ const TEXTS = {
     earliest_end: "Earliest end", latest_end: "Latest end", feeder: "Feeder", feeders: "Feeders",
     filter_all: "All animals", filter_no_feeders: "Without feeders", filter_only_feeders: "Feeders only",
     diapause_end: "End diapause",
+    enclosures: "Enclosures", enclosure: "Enclosure", no_enclosure: "— no enclosure —",
     breeding: "Breeding", stock: "Stock", lineage: "Family tree", growth: "Growth", documents: "Documents",
     origin_section: "Origin & family tree", seller: "Breeder / seller", price: "Price (€)",
     mother_id: "Mother", father_id: "Father", generation: "Generation", partner_id: "Partner (own animal)",
@@ -210,6 +212,7 @@ class Store extends EventTarget {
     hass.connection
       .subscribeMessage((msg) => {
         this.animals = msg.animals;
+        this.enclosures = msg.enclosures || [];
         this._emit();
       }, { type: "arthropoda/subscribe" })
       .catch((err) => {
@@ -247,6 +250,11 @@ class Store extends EventTarget {
   }
 
   animal(id) { return (this.animals || []).find((a) => a.id === id); }
+
+  enclosure(idOrCode) {
+    const key = String(idOrCode).toLowerCase();
+    return (this.enclosures || []).find((e) => String(e.id) === key || e.code.toLowerCase() === key);
+  }
 
   log(animalIds, entryType, extra = {}) {
     return this.hass.callWS({
@@ -504,7 +512,7 @@ export function field(label, inner, wide = false) {
   return `<label class="ak-field ${wide ? "wide" : ""}"><span>${esc(label)}</span>${inner}</label>`;
 }
 
-function selectHtml(name, options, value, includeEmpty = true, emptyLabel = "—") {
+export function selectHtml(name, options, value, includeEmpty = true, emptyLabel = "—") {
   const opts = options.map(([v, l]) =>
     `<option value="${esc(v)}" ${String(v) === String(value ?? "") ? "selected" : ""}>${esc(l)}</option>`).join("");
   return `<select name="${esc(name)}">${includeEmpty ? `<option value="">${esc(emptyLabel)}</option>` : ""}${opts}</select>`;
@@ -526,7 +534,7 @@ function entityOptions(hass, domains, deviceClass) {
 }
 
 /** Keuze uit entiteiten; meervoudig = chips + keuzelijst om toe te voegen. */
-function entityField(hass, name, label, domains, value, { multiple = false, deviceClass = null } = {}) {
+export function entityField(hass, name, label, domains, value, { multiple = false, deviceClass = null } = {}) {
   let options = entityOptions(hass, domains, deviceClass);
   const current = multiple ? (value || []) : value;
   // Huidige waarde altijd tonen, ook als het device_class-filter ze niet vindt.
@@ -549,7 +557,7 @@ function plantField(hass, name, value) {
   return entityField(hass, name, t(hass, "food_plants"), ["plant"], value || [], { multiple: true });
 }
 
-function wireMulti(body) {
+export function wireMulti(body) {
   body.querySelectorAll("[data-multi]").forEach((box) => {
     const chips = box.querySelector(".chips");
     chips.addEventListener("click", (e) => {
@@ -568,7 +576,7 @@ function wireMulti(body) {
   });
 }
 
-function readForm(body) {
+export function readForm(body) {
   const data = {};
   body.querySelectorAll("[name]").forEach((el) => {
     if (!el.name) return;
@@ -584,7 +592,7 @@ function readForm(body) {
 
 // ------------------------------------------------------ dier wijzigen/toe --
 
-const NUMBER = (name, value, step = 1) =>
+export const NUMBER = (name, value, step = 1) =>
   `<input type="number" name="${name}" step="${step}" value="${value ?? ""}">`;
 
 /** Dialoog om een dier toe te voegen (animal = null) of te wijzigen. */
@@ -613,6 +621,7 @@ export async function openAnimalDialog(hass, animal = null, preset = null) {
           ${field(t(hass, "instar"), NUMBER("instar", cfg.instar))}
           ${field(t(hass, "count"), NUMBER("count", cfg.count))}
           ${field(t(hass, "origin"), selectHtml("origin", opts("origin", meta.origins || []), cfg.origin))}
+          ${field(t(hass, "enclosure"), selectHtml("_enclosure", (store.enclosures || []).map((e) => [e.id, `${e.code}${e.name ? ` – ${e.name}` : ""}`]), animal?.enclosure_id ?? preset?._enclosure ?? "", true, t(hass, "no_enclosure")))}
           ${field(t(hass, "born_at"), `<input type="date" name="born_at" value="${esc(cfg.born_at || "")}">`)}
           ${field(t(hass, "acquired_at"), `<input type="date" name="acquired_at" value="${esc(cfg.acquired_at || "")}">`)}
         </div></fieldset>
@@ -653,10 +662,25 @@ export async function openAnimalDialog(hass, animal = null, preset = null) {
     async (body) => {
       const data = readForm(body);
       if (!data.name || !data.species_id) throw new Error(t(hass, "required"));
+      const enclosureId = data._enclosure ? Number(data._enclosure) : null;
+      delete data._enclosure;
       if (animal) {
+        if ((animal.enclosure_id ?? null) !== enclosureId) {
+          await hass.callWS({ type: "arthropoda/enclosure/assign", animal_id: animal.id, enclosure_id: enclosureId });
+        }
         await hass.callWS({ type: "arthropoda/animal/update", animal_id: animal.id, data });
       } else {
-        await hass.callWS({ type: "arthropoda/animal/add", data });
+        const { animal_id: newId } = await hass.callWS({ type: "arthropoda/animal/add", data });
+        if (enclosureId !== null) {
+          // Het nieuwe dier is pas na het herladen van de integratie gekend.
+          for (let attempt = 0; attempt < 10; attempt++) {
+            await new Promise((r) => setTimeout(r, 700));
+            try {
+              await hass.callWS({ type: "arthropoda/enclosure/assign", animal_id: newId, enclosure_id: enclosureId });
+              break;
+            } catch (err) { if (attempt === 9) throw err; }
+          }
+        }
       }
       return true;
     },

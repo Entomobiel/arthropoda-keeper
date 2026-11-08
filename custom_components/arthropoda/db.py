@@ -18,7 +18,7 @@ from .caresheet import ParsedCaresheet, build_document, profile_parts, split_spe
 from .journal import COUNTER_TYPES, ENTRY_TYPES, compute_effects
 from .models import Animal, AnimalBundle, CareProfile, Measurement, Species
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 _SCHEMA_V1 = """
 CREATE TABLE species (
@@ -163,7 +163,41 @@ UPDATE brood SET status = 'hatched',
                   WHERE j.animal_id = brood.mother_id AND j.type = 'hatch' AND j.ts >= brood.laid_at)
 """
 
-_MIGRATIONS: dict[int, str] = {1: _SCHEMA_V1, 2: _SCHEMA_V2}
+# Versie 3 (fase 7): kasten / terraria. Alleen toevoegingen.
+_SCHEMA_V3 = """
+CREATE TABLE enclosure (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    code         TEXT NOT NULL UNIQUE COLLATE NOCASE,
+    name         TEXT,
+    type         TEXT NOT NULL DEFAULT 'terrarium',
+    length_cm    REAL,
+    width_cm     REAL,
+    height_cm    REAL,
+    material     TEXT,
+    ventilation  TEXT,
+    location     TEXT,
+    acquired_at  TEXT,
+    price        REAL,
+    seller       TEXT,
+    status       TEXT NOT NULL DEFAULT 'in_use',
+    nfc_tag      TEXT,
+    config       TEXT NOT NULL DEFAULT '{}',
+    equipment    TEXT NOT NULL DEFAULT '[]',
+    notes        TEXT,
+    created_at   TEXT NOT NULL,
+    updated_at   TEXT NOT NULL
+);
+ALTER TABLE animal ADD COLUMN enclosure_id INTEGER
+"""
+
+_MIGRATIONS: dict[int, str] = {1: _SCHEMA_V1, 2: _SCHEMA_V2, 3: _SCHEMA_V3}
+
+ENCLOSURE_TYPES = ("terrarium", "faunabox", "breeding_box", "formicarium", "aquarium", "net_cage", "other")
+ENCLOSURE_STATUSES = ("in_use", "empty", "maintenance")
+ENCLOSURE_FIELDS = (
+    "code", "name", "type", "length_cm", "width_cm", "height_cm", "material", "ventilation",
+    "location", "acquired_at", "price", "seller", "status", "nfc_tag", "notes",
+)
 
 BROOD_STATUSES = ("incubating", "hatched", "failed")
 EGG_TYPES = ("egg_sac", "ootheca", "egg_laying")
@@ -184,6 +218,7 @@ UPDATABLE_FIELDS = {
     "season_mode",
     "premolt",
     "info",
+    "enclosure_id",
 }
 
 
@@ -543,6 +578,7 @@ class Database:
             father_id=row["father_id"],
             generation=row["generation"],
             brood_id=row["brood_id"],
+            enclosure_id=row["enclosure_id"],
         )
 
     def get_animal(self, animal_id: str) -> Animal | None:
@@ -776,6 +812,102 @@ class Database:
                         " WHERE id = ?",
                         (int(quantity), now, stock["colony_id"]),
                     )
+
+    # --- kasten -----------------------------------------------------------
+
+    @staticmethod
+    def _row_to_enclosure(row: sqlite3.Row) -> dict[str, Any]:
+        enc = {k: row[k] for k in ("id", *ENCLOSURE_FIELDS, "created_at", "updated_at")}
+        enc["config"] = json.loads(row["config"] or "{}")
+        enc["equipment"] = json.loads(row["equipment"] or "[]")
+        dims = [enc["length_cm"], enc["width_cm"], enc["height_cm"]]
+        enc["volume_l"] = round(dims[0] * dims[1] * dims[2] / 1000, 1) if all(dims) else None
+        return enc
+
+    def list_enclosures(self) -> list[dict[str, Any]]:
+        with self._lock:
+            rows = self.conn.execute("SELECT * FROM enclosure ORDER BY code").fetchall()
+        return [self._row_to_enclosure(r) for r in rows]
+
+    def get_enclosure(self, enclosure_id: int) -> dict[str, Any] | None:
+        with self._lock:
+            row = self.conn.execute("SELECT * FROM enclosure WHERE id = ?", (enclosure_id,)).fetchone()
+        return self._row_to_enclosure(row) if row else None
+
+    def find_enclosure(self, *, code: str | None = None, nfc_tag: str | None = None) -> dict[str, Any] | None:
+        column, value = ("code", code) if code is not None else ("nfc_tag", nfc_tag)
+        with self._lock:
+            row = self.conn.execute(
+                f"SELECT * FROM enclosure WHERE {column} = ?", (str(value).strip(),)
+            ).fetchone()
+        return self._row_to_enclosure(row) if row else None
+
+    def save_enclosure(self, item: dict[str, Any]) -> int:
+        """Kast toevoegen (zonder id) of bijwerken (met id)."""
+        code = (item.get("code") or "").strip()
+        if not code:
+            raise ValueError("Code is verplicht")
+        if item.get("type") and item["type"] not in ENCLOSURE_TYPES:
+            raise ValueError(f"Ongeldig type: {item['type']}")
+        if item.get("status") and item["status"] not in ENCLOSURE_STATUSES:
+            raise ValueError(f"Ongeldige status: {item['status']}")
+        fields = {k: item.get(k) for k in ENCLOSURE_FIELDS}
+        fields["code"] = code
+        fields["type"] = fields["type"] or "terrarium"
+        fields["status"] = fields["status"] or "in_use"
+        fields["nfc_tag"] = (fields["nfc_tag"] or None)
+        fields["config"] = json.dumps(item.get("config") or {}, ensure_ascii=False)
+        fields["equipment"] = json.dumps(item.get("equipment") or [], ensure_ascii=False)
+        now = _now()
+        with self._lock:
+            clash = self.conn.execute(
+                "SELECT id FROM enclosure WHERE code = ?", (code,)
+            ).fetchone()
+            if clash and clash["id"] != item.get("id"):
+                raise ValueError(f"De code {code} wordt al gebruikt")
+            if fields["nfc_tag"]:
+                tag_clash = self.conn.execute(
+                    "SELECT code FROM enclosure WHERE nfc_tag = ? AND id != ?",
+                    (fields["nfc_tag"], item.get("id") or -1),
+                ).fetchone()
+                if tag_clash:
+                    raise ValueError(f"Deze NFC-tag hoort al bij kast {tag_clash['code']}")
+            if item.get("id"):
+                sets = ", ".join(f"{k} = ?" for k in fields)
+                cur = self.conn.execute(
+                    f"UPDATE enclosure SET {sets}, updated_at = ? WHERE id = ?",
+                    (*fields.values(), now, int(item["id"])),
+                )
+                if cur.rowcount == 0:
+                    raise KeyError(item["id"])
+                return int(item["id"])
+            cols = ", ".join(fields)
+            marks = ", ".join("?" for _ in fields)
+            cur = self.conn.execute(
+                f"INSERT INTO enclosure ({cols}, created_at, updated_at) VALUES ({marks}, ?, ?)",
+                (*fields.values(), now, now),
+            )
+            return cur.lastrowid
+
+    def delete_enclosure(self, enclosure_id: int) -> bool:
+        """Kast verwijderen; bewoners worden losgekoppeld (blijven bestaan)."""
+        with self._tx() as conn:
+            conn.execute("UPDATE animal SET enclosure_id = NULL WHERE enclosure_id = ?", (enclosure_id,))
+            cur = conn.execute("DELETE FROM enclosure WHERE id = ?", (enclosure_id,))
+        return cur.rowcount > 0
+
+    def service_equipment(self, enclosure_id: int, index: int, day: str) -> bool:
+        """Uitrusting vervangen/gereinigd op `day` (JJJJ-MM-DD)."""
+        enc = self.get_enclosure(enclosure_id)
+        if enc is None or not 0 <= index < len(enc["equipment"]):
+            return False
+        enc["equipment"][index]["serviced_at"] = day
+        with self._lock:
+            self.conn.execute(
+                "UPDATE enclosure SET equipment = ?, updated_at = ? WHERE id = ?",
+                (json.dumps(enc["equipment"], ensure_ascii=False), _now(), enclosure_id),
+            )
+        return True
 
     # --- kweek ------------------------------------------------------------
 

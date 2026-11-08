@@ -19,6 +19,7 @@ from .db import Database
 from .digest import DigestManager
 from .frontend import async_register_frontend, async_unregister_panel
 from .http_views import async_register_views
+from .nfc import async_setup_nfc
 from .services import async_setup_services
 from .websocket_api import async_register_websocket
 
@@ -96,6 +97,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ArthropodaConfigEntry) -
         coordinator.async_add_listener(lambda: async_dispatcher_send(hass, SIGNAL_UPDATE))
     )
     await async_register_frontend(hass, entry.title)
+    entry.async_on_unload(async_setup_nfc(hass, coordinator))
     async_dispatcher_send(hass, SIGNAL_UPDATE)
 
     alarms.async_start()

@@ -88,6 +88,24 @@ def _check_range(
         problems.append(high)
 
 
+def enclosure_too_small(enclosure: dict[str, Any], species: Any) -> bool:
+    """Is de kast kleiner dan de minimale maat uit de caresheet?
+
+    Verwacht in de soort: enclosure: {min_size_cm: [lengte, breedte, hoogte]}.
+    Ontbreekt een maat (bij de kast of de soort), dan wordt niet gewaarschuwd.
+    """
+    if species is None:
+        return False
+    minimum = ((species.info.get("enclosure") or {}).get("min_size_cm")) if species.info else None
+    if not isinstance(minimum, (list, tuple)) or len(minimum) != 3:
+        return False
+    actual = (enclosure.get("length_cm"), enclosure.get("width_cm"), enclosure.get("height_cm"))
+    try:
+        return any(a is not None and m is not None and float(a) < float(m) for a, m in zip(actual, minimum))
+    except (TypeError, ValueError):
+        return False
+
+
 def safe_temperature(values: dict[str, Any]) -> float | None:
     """Gevaarlijke temperatuur: temp_max_safe, anders dagmaximum + marge."""
     return safe_maximum(values.get("temp_day") or values.get("temp_night"),

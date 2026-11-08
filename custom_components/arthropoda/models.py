@@ -62,6 +62,7 @@ class Animal:
     father_id: str | None = None
     generation: str | None = None
     brood_id: int | None = None
+    enclosure_id: int | None = None
 
 
 @dataclass(slots=True)

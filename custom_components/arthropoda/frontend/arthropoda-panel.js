@@ -9,9 +9,15 @@ import {
   navigate, nextTask, openAnimalDialog, openJournalDialog, quickLog, rangeBar, stageText, t, toast,
   feederFilter, field, isFeeder, openDialog, photoCredit, photoUrl,
 } from "./arthropoda-common.js";
+import {
+  WORK_CSS, dims, getRound, openEnclosureDialog, openLabelsDialog, openNfcDialog, openRoundSummary,
+  openTasks, renderWorkScreen, startRound, te,
+} from "./arthropoda-enclosures.js";
 
 const CSS = `
   ${BASE_CSS}
+  ${WORK_CSS}
+  .enc-code { font-size: 1.4em; font-weight: 600; }
   :host { display:block; min-height:100vh; background: var(--primary-background-color, #fafafa);
           color: var(--primary-text-color); font-family: var(--paper-font-body1_-_font-family, Roboto, sans-serif); }
   header { display:flex; align-items:center; gap:8px; height:56px; padding:0 12px;
@@ -89,7 +95,7 @@ const CSS = `
   }
 `;
 
-const TABS = ["collection", "journal", "breeding", "stock", "species", "climate"];
+const TABS = ["collection", "enclosures", "journal", "breeding", "stock", "species", "climate"];
 
 class ArthropodaPanel extends HTMLElement {
   constructor() {
@@ -142,10 +148,13 @@ class ArthropodaPanel extends HTMLElement {
     if (!location.pathname.startsWith("/arthropoda")) return;
     const params = new URLSearchParams(location.search);
     const animal = params.get("animal");
-    const view = animal ? "animal" : (TABS.includes(params.get("view")) ? params.get("view") : "collection");
-    if (view !== this._view || animal !== this._animalId) {
+    const enclosure = params.get("enclosure");
+    const view = enclosure ? "work" : animal ? "animal"
+      : (TABS.includes(params.get("view")) ? params.get("view") : "collection");
+    if (view !== this._view || animal !== this._animalId || enclosure !== this._encCode) {
       this._view = view;
       this._animalId = animal;
+      this._encCode = enclosure;
       this._renderView();
     }
   }
@@ -165,6 +174,8 @@ class ArthropodaPanel extends HTMLElement {
     else if (this._view === "species") this._viewSpecies();
     else if (this._view === "climate") this._viewClimate();
     else if (this._view === "breeding") this._viewBreeding();
+    else if (this._view === "enclosures") this._viewEnclosures();
+    else if (this._view === "work") this._viewWork();
     else if (this._view === "stock") this._viewStock();
     this._update();
     window.scrollTo(0, 0);
@@ -178,7 +189,8 @@ class ArthropodaPanel extends HTMLElement {
       return;
     }
     const fn = { collection: this._updateCollection, animal: this._updateAnimal,
-                 climate: this._updateClimate }[this._view];
+                 climate: this._updateClimate, enclosures: this._updateEnclosures,
+                 work: () => this._workDraw?.() }[this._view];
     if (fn) fn.call(this);
     if (this._view === "animal" || this._view === "journal") {
       clearTimeout(this._journalTimer);
@@ -276,13 +288,13 @@ class ArthropodaPanel extends HTMLElement {
     const h = this._hass;
     const rows = [];
     const r = a.readings;
-    if (r.temperature !== null || a.config.temperature_sensors?.length) {
+    if (r.temperature !== null || (a.climate_config || a.config).temperature_sensors?.length) {
       rows.push([t(h, "temperature"), r.temperature, a.targets.temperature, "°C"]);
     }
-    if (r.humidity !== null || a.config.humidity_sensor) {
+    if (r.humidity !== null || (a.climate_config || a.config).humidity_sensor) {
       rows.push([t(h, "humidity"), r.humidity, a.targets.humidity, "%"]);
     }
-    if (r.water_temperature !== null || a.config.water_temperature_sensor) {
+    if (r.water_temperature !== null || (a.climate_config || a.config).water_temperature_sensor) {
       rows.push([t(h, "water_temperature"), r.water_temperature, a.targets.water_temperature, "°C"]);
     }
     return rows.map(([label, value, target, unit]) => `
@@ -409,6 +421,8 @@ class ArthropodaPanel extends HTMLElement {
             ${a.next_molt ? `<div><span>${esc(t(h, "next_molt"))}</span><span>${esc(fmtDate(h, a.next_molt))}</span></div>` : ""}
             ${a.acquired_at ? `<div><span>${esc(t(h, "acquired_at"))}</span><span>${esc(fmtDate(h, a.acquired_at))}</span></div>` : ""}
             ${a.origin ? `<div><span>${esc(t(h, "origin"))}</span><span>${esc(L("origin", a.origin))}</span></div>` : ""}
+            ${a.enclosure_id ? (() => { const enc = this._store.enclosure(a.enclosure_id);
+                return enc ? `<div><span>${esc(t(h, "enclosure"))}</span><span><a href="/arthropoda?enclosure=${esc(enc.code)}" data-nav>${esc(enc.code)}${enc.name ? ` – ${esc(enc.name)}` : ""}</a></span></div>` : ""; })() : ""}
             ${a.config.seller ? `<div><span>${esc(t(h, "seller"))}</span><span>${esc(a.config.seller)}</span></div>` : ""}
             ${a.config.price !== undefined && a.config.price !== null ? `<div><span>${esc(t(h, "price"))}</span><span>€ ${fmtNum(a.config.price, 2)}</span></div>` : ""}
             ${a.lineage?.generation ? `<div><span>${esc(t(h, "generation"))}</span><span>${esc(a.lineage.generation)}</span></div>` : ""}
@@ -429,6 +443,7 @@ class ArthropodaPanel extends HTMLElement {
           ${Object.entries(a.measurements).map(([k, m]) => `<div><span>${esc(t(h, k))}</span><span>${fmtNum(m.value, 2)} ${esc(m.unit || "")} <span class="muted small">${esc(fmtDate(h, m.ts))}</span></span></div>`).join("")}
         </div></div>` : ""}
       </div>`;
+    this._wireLinks(box);
   }
 
   _onDetailClick(e) {
@@ -571,6 +586,98 @@ class ArthropodaPanel extends HTMLElement {
       await this._hass.callWS({ type: "arthropoda/documents/delete", document_id: docId });
       this._loadAnimalExtras();
     } catch (err) { this._err(err); }
+  }
+
+  // --- kasten -----------------------------------------------------------------
+
+  _viewEnclosures() {
+    const h = this._hass;
+    this._main.innerHTML = `
+      <div class="toolbar">
+        <input type="search" placeholder="${esc(te(h, "search"))}" value="${esc(this._encSearch || "")}">
+        <select data-enc-filter>
+          <option value="all">${esc(te(h, "all"))}</option>
+          <option value="in_use">${esc(te(h, "s_in_use"))}</option>
+          <option value="empty">${esc(te(h, "s_empty"))}</option>
+          <option value="maintenance">${esc(te(h, "s_maintenance"))}</option>
+        </select>
+        <span class="grow"></span>
+        <button class="ak" data-round>🔁 ${esc(te(h, getRound() ? "finish_round" : "start_round"))}</button>
+        <button class="ak" data-labels>🖨 ${esc(te(h, "labels"))}</button>
+        <button class="ak primary" data-add-enc>＋ ${esc(te(h, "add_enclosure"))}</button>
+      </div>
+      <div class="grid" data-enc-list></div>`;
+    const search = this._main.querySelector("input[type=search]");
+    search.addEventListener("input", () => { this._encSearch = search.value; this._updateEnclosures(); });
+    const filter = this._main.querySelector("[data-enc-filter]");
+    filter.value = this._encFilter || "all";
+    filter.addEventListener("change", () => { this._encFilter = filter.value; this._updateEnclosures(); });
+    this._main.querySelector("[data-add-enc]").addEventListener("click", () => openEnclosureDialog(h));
+    this._main.querySelector("[data-labels]").addEventListener("click", () => openLabelsDialog(h));
+    this._main.querySelector("[data-round]").addEventListener("click", (e) => {
+      if (getRound()) openRoundSummary(h);
+      else { startRound(); e.currentTarget.textContent = `🔁 ${te(h, "finish_round")}`; toast(this, te(h, "start_round")); }
+    });
+    this._main.querySelector("[data-enc-list]").addEventListener("click", (e) => this._onEnclosureClick(e));
+  }
+
+  _updateEnclosures() {
+    const box = this._main?.querySelector("[data-enc-list]");
+    if (!box) return;
+    const h = this._hass;
+    const q = (this._encSearch || "").toLowerCase();
+    const filter = this._encFilter || "all";
+    const list = (this._store.enclosures || []).filter((e) => {
+      if (filter === "empty" && !e.empty) return false;
+      if (filter === "in_use" && (e.empty || e.status === "maintenance")) return false;
+      if (filter === "maintenance" && e.status !== "maintenance") return false;
+      const names = (e.residents || []).map((id) => this._store.animal(id)?.name || "").join(" ");
+      return !q || [e.code, e.name, e.location, names].some((v) => (v || "").toLowerCase().includes(q));
+    });
+    if (!this._store.enclosures) { box.innerHTML = `<div class="empty">…</div>`; return; }
+    if (!list.length) { box.innerHTML = `<div class="empty">${esc(te(h, "empty_list"))}</div>`; return; }
+    box.innerHTML = list.map((e) => {
+      const due = openTasks(this._store, e).length;
+      const status = e.status === "maintenance" ? "maintenance" : e.empty ? "empty" : "in_use";
+      const r = e.readings;
+      return `<div class="card tile" data-enc="${esc(e.code)}">
+        <div class="row"><div class="grow"><div class="enc-code">${esc(e.code)}</div>
+          <div class="muted small">${esc(e.name || "")}${e.name ? " · " : ""}${esc(te(h, `t_${e.type}`))}</div></div>
+          <span class="chip ${status === "empty" ? "" : status === "maintenance" ? "problem" : "ok"}">${esc(te(h, `s_${status}`))}</span></div>
+        <div class="facts">
+          ${dims(e) ? `<div><span>${esc(te(h, "dimensions"))}</span><span>${esc(dims(e))}${e.volume_l ? ` · ${fmtNum(e.volume_l)} ${esc(te(h, "liters"))}` : ""}</span></div>` : ""}
+          ${e.location ? `<div><span>${esc(te(h, "place"))}</span><span>${esc(e.location)}</span></div>` : ""}
+          ${r ? `<div><span>${esc(te(h, "climate_short"))}</span><span>${r.temperature !== null ? `${fmtNum(r.temperature)} °C` : ""} ${r.humidity !== null ? `· ${fmtNum(r.humidity, 0)} %` : ""}</span></div>` : ""}
+          <div><span>${esc(te(h, "tasks_today"))}</span><span>${due ? `<b>${due}</b>` : "–"}</span></div>
+        </div>
+        ${(e.residents || []).length ? `<div class="small">${e.residents.map((id) => this._link(id)).join(", ")}</div>` : ""}
+        ${e.too_small_for?.length ? `<div class="chip problem">⚠ ${esc(te(h, "too_small"))}: ${esc(e.too_small_for.join(", "))}</div>` : ""}
+        <div class="actions">
+          <button class="ak primary" data-work>▶ ${esc(te(h, "work_screen"))}</button>
+          <button class="ak" data-edit>⚙ ${esc(te(h, "edit"))}</button>
+          <button class="ak" data-nfc>📶 ${esc(te(h, "nfc"))}${e.nfc_tag ? " ✓" : ""}</button>
+        </div></div>`;
+    }).join("");
+    this._wireLinks(box);
+  }
+
+  _onEnclosureClick(e) {
+    const tile = e.target.closest("[data-enc]");
+    if (!tile || e.target.closest("a")) return;
+    const enc = this._store.enclosure(tile.dataset.enc);
+    const btn = e.target.closest("button");
+    if (btn?.hasAttribute("data-edit")) return openEnclosureDialog(this._hass, enc);
+    if (btn?.hasAttribute("data-nfc")) return openNfcDialog(this._hass, enc);
+    navigate(`/arthropoda?enclosure=${encodeURIComponent(enc.code)}`);
+  }
+
+  _viewWork() {
+    this.shadowRoot.querySelectorAll("nav button").forEach((b) =>
+      b.classList.toggle("active", b.dataset.tab === "enclosures"));
+    this._workDraw = renderWorkScreen(this, this._main, this._hass, this._encCode, {
+      onEdit: (enc) => openEnclosureDialog(this._hass, enc),
+      onBack: () => navigate("/arthropoda?view=enclosures"),
+    });
   }
 
   // --- kweek ------------------------------------------------------------------

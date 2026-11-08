@@ -36,10 +36,11 @@ from .const import (
     MONITORED_STATUSES,
     SUBENTRY_ANIMAL,
 )
+from .const import MULTI_ACTUATOR_KEYS, SENSOR_KEYS, TUNING_KEYS
 from .db import Database
 from .journal import can_molt
 from .models import AnimalBundle
-from .profile import Readings, evaluate, resolve_profile, target_temperature
+from .profile import Readings, enclosure_too_small, evaluate, resolve_profile, target_temperature
 from .tasks import Task, compute_tasks, estimate_next_molt
 
 _LOGGER = logging.getLogger(__name__)
@@ -125,6 +126,9 @@ class ArthropodaCoordinator(DataUpdateCoordinator[dict[str, AnimalSnapshot]]):
         self.broods: list[dict[str, Any]] = []
         self.stock: list[dict[str, Any]] = []
         self.documents: list[dict[str, Any]] = []
+        self.enclosures: dict[int, dict[str, Any]] = {}
+        self.enclosure_tasks: list[Task] = []
+        self.effective_configs: dict[str, dict[str, Any]] = {}
         self._unsub_state: Callable[[], None] | None = None
 
     # --- configuratie -----------------------------------------------------
@@ -140,7 +144,7 @@ class ArthropodaCoordinator(DataUpdateCoordinator[dict[str, AnimalSnapshot]]):
 
     def _source_entities(self) -> set[str]:
         ids: set[str] = set()
-        for cfg in self.animal_configs.values():
+        for cfg in (self.effective_configs or self.animal_configs).values():
             ids.update(cfg.get(CONF_TEMPERATURE_SENSORS) or [])
             for key in (CONF_HUMIDITY_SENSOR, CONF_WATER_TEMPERATURE_SENSOR):
                 if cfg.get(key):
@@ -158,7 +162,15 @@ class ArthropodaCoordinator(DataUpdateCoordinator[dict[str, AnimalSnapshot]]):
         def _changed(event: Event[EventStateChangedData]) -> None:
             self.async_recompute()
 
+        self._tracked = sources
         self._unsub_state = async_track_state_change_event(self.hass, sources, _changed)
+
+    @callback
+    def _retrack_if_needed(self) -> None:
+        """Sensoren opnieuw volgen als een kast andere sensoren kreeg."""
+        if self._source_entities() != getattr(self, "_tracked", set()):
+            self.async_stop_tracking()
+            self.async_start_tracking()
 
     @callback
     def async_stop_tracking(self) -> None:
@@ -175,12 +187,82 @@ class ArthropodaCoordinator(DataUpdateCoordinator[dict[str, AnimalSnapshot]]):
                 self.db.list_broods(status="incubating"),
                 self.db.list_stock(),
                 self.db.list_documents(),
+                {e["id"]: e for e in self.db.list_enclosures()},
             )
 
-        self._bundles, self.broods, self.stock, self.documents = (
+        self._bundles, self.broods, self.stock, self.documents, self.enclosures = (
             await self.hass.async_add_executor_job(_load)
         )
-        return self._compute()
+        result = self._compute()
+        if self._unsub_state is not None or self._source_entities():
+            self._retrack_if_needed()
+        return result
+
+    # --- kasten -----------------------------------------------------------
+
+    def residents(self, enclosure_id: int, monitored_only: bool = True) -> list[str]:
+        """Dieren in een kast."""
+        return [
+            aid for aid, bundle in self._bundles.items()
+            if bundle.animal.enclosure_id == enclosure_id
+            and (not monitored_only or bundle.animal.status in MONITORED_STATUSES)
+        ]
+
+    def _effective_config(self, animal_id: str, cfg: dict[str, Any]) -> dict[str, Any]:
+        """Configuratie van een dier, met klimaat van de kast als die er een heeft.
+
+        Heeft de kast sensoren of toestellen, dan bepaalt de kast het volledige
+        klimaat (sensoren, toestellen, afstelling) voor al haar bewoners.
+        """
+        bundle = self._bundles.get(animal_id)
+        enc = self.enclosures.get(bundle.animal.enclosure_id) if bundle else None
+        enc_cfg = (enc or {}).get("config") or {}
+        climate_keys = (*[k for k in SENSOR_KEYS if k != "food_plants"], *ACTUATOR_KEYS)
+        if not any(enc_cfg.get(k) for k in climate_keys):
+            return cfg
+        merged = {k: v for k, v in cfg.items() if k not in (*climate_keys, *TUNING_KEYS)}
+        merged.update({k: v for k, v in enc_cfg.items() if k in (*climate_keys, *TUNING_KEYS) and v not in (None, "", [])})
+        merged["climate_from_enclosure"] = enc["id"]
+        return merged
+
+    def _enclosure_tasks(self, snapshots: dict[str, "AnimalSnapshot"], now: datetime) -> list[Task]:
+        """Schoonmaak/substraat per kast (één taak voor alle bewoners) en uitrusting."""
+        tasks: list[Task] = []
+        for enc_id, enc in self.enclosures.items():
+            residents = [snapshots[a] for a in self.residents(enc_id) if a in snapshots]
+            snooze = {
+                k: parsed for k, iso in ((enc.get("config") or {}).get("snooze") or {}).items()
+                if (parsed := dt_util.parse_datetime(iso)) is not None
+            }
+            for kind, interval_key, counter in (
+                ("cleaning", "cleaning_interval_days", "cleaning"),
+                ("substrate_change", "substrate_change_interval_days", "substrate_change"),
+            ):
+                intervals = [s.values.get(interval_key) for s in residents if s.values.get(interval_key)]
+                if not intervals:
+                    continue
+                lasts = [s.bundle.last_ts.get(counter) for s in residents if s.bundle.last_ts.get(counter)]
+                base = max(lasts) if lasts else min(s.animal.created_at for s in residents)
+                due = base + timedelta(days=min(intervals))
+                if snooze.get(kind) and snooze[kind] > due:
+                    due = snooze[kind]
+                tasks.append(Task("", kind, due, float(min(intervals)), enclosure_id=enc_id))
+            for index, item in enumerate(enc.get("equipment") or []):
+                interval = item.get("interval_days")
+                if not interval:
+                    continue
+                start = dt_util.parse_date(item.get("serviced_at") or "") or dt_util.parse_date(
+                    (enc.get("created_at") or "")[:10]
+                )
+                if start is None:
+                    continue
+                due = dt_util.start_of_local_day(start) + timedelta(days=float(interval))
+                key = f"equipment:{index}"
+                if snooze.get(key) and snooze[key] > due:
+                    due = snooze[key]
+                tasks.append(Task("", "equipment", due, float(interval), enclosure_id=enc_id,
+                                  index=index, label=item.get("name") or item.get("type")))
+        return tasks
 
     # --- collectie-overzicht (kweek, voorraad, documenten) -----------------
 
@@ -289,6 +371,9 @@ class ArthropodaCoordinator(DataUpdateCoordinator[dict[str, AnimalSnapshot]]):
         now = dt_util.utcnow()
         local = dt_util.as_local(now)
         configs = self.animal_configs
+        self.effective_configs = {
+            aid: self._effective_config(aid, configs.get(aid, {})) for aid in self._bundles
+        }
         default_fast = self.config_entry.options.get(
             CONF_POST_MOLT_FAST_DAYS, DEFAULT_POST_MOLT_FAST_DAYS
         )
@@ -296,7 +381,7 @@ class ArthropodaCoordinator(DataUpdateCoordinator[dict[str, AnimalSnapshot]]):
 
         for animal_id, bundle in self._bundles.items():
             animal = bundle.animal
-            cfg = configs.get(animal_id, {})
+            cfg = self.effective_configs.get(animal_id, {})
             values, season = resolve_profile(
                 bundle.profiles, animal.stage, animal.season_mode, local.month
             )
@@ -359,9 +444,18 @@ class ArthropodaCoordinator(DataUpdateCoordinator[dict[str, AnimalSnapshot]]):
                     animal_id, values, last, baseline, feeding_paused, snoozed,
                     snapshot.diapause,
                 )
+                if animal.enclosure_id in self.enclosures:
+                    # Schoonmaak en substraat gebeuren per kast (zie _enclosure_tasks).
+                    snapshot.tasks = [
+                        t for t in snapshot.tasks if t.kind not in ("cleaning", "substrate_change")
+                    ]
+                    snapshot.problems = [p for p in snapshot.problems if p != "cleaning_overdue"]
+                    if enclosure_too_small(self.enclosures[animal.enclosure_id], bundle.species):
+                        snapshot.problems.append("enclosure_too_small")
                 if snapshot.can_molt:
                     snapshot.next_molt = estimate_next_molt(bundle.molt_times)
             result[animal_id] = snapshot
+        self.enclosure_tasks = self._enclosure_tasks(result, now)
         return result
 
     # --- schrijven --------------------------------------------------------
@@ -399,9 +493,71 @@ class ArthropodaCoordinator(DataUpdateCoordinator[dict[str, AnimalSnapshot]]):
         return ids
 
     def all_tasks(self) -> list[Task]:
-        """Taken van alle bewaakte dieren, gesorteerd op vervaldatum."""
+        """Taken van alle bewaakte dieren en kasten, gesorteerd op vervaldatum."""
         tasks = [t for snap in (self.data or {}).values() for t in snap.tasks]
+        tasks.extend(self.enclosure_tasks)
         return sorted(tasks, key=lambda t: t.due)
+
+    def task_target_name(self, task: Task) -> str:
+        """Naam van het dier of de kast waar een taak bij hoort."""
+        if task.enclosure_id is not None:
+            enc = self.enclosures.get(task.enclosure_id) or {}
+            name = f"{enc.get('code', '?')}{' – ' + enc['name'] if enc.get('name') else ''}"
+            return f"{task.label} ({name})" if task.label else name
+        snap = (self.data or {}).get(task.animal_id)
+        return snap.animal.name if snap else "?"
+
+    async def async_complete_task(self, task: Task) -> None:
+        """Taak afvinken: dagboekregel(s) of onderhoud van een toestel noteren."""
+        if task.enclosure_id is None:
+            await self.async_log([task.animal_id], task.journal_type, data={"source": "todo"})
+            return
+        if task.kind == "equipment":
+            day = dt_util.now().date().isoformat()
+            await self.hass.async_add_executor_job(
+                self.db.service_equipment, task.enclosure_id, task.index, day
+            )
+            await self.async_refresh()
+            return
+        residents = self.residents(task.enclosure_id)
+        if residents:
+            await self.async_log(
+                residents, task.journal_type,
+                data={"source": "todo", "enclosure_id": task.enclosure_id},
+            )
+
+    async def async_snooze_task(self, task: Task, until: datetime) -> None:
+        if task.enclosure_id is None:
+            await self.async_snooze(task.animal_id, task.kind, until)
+            return
+        enc = self.enclosures[task.enclosure_id]
+        key = f"equipment:{task.index}" if task.kind == "equipment" else task.kind
+        config = dict(enc.get("config") or {})
+        config["snooze"] = {**(config.get("snooze") or {}), key: until.isoformat()}
+        await self.hass.async_add_executor_job(
+            self.db.save_enclosure, {**enc, "config": config}
+        )
+        await self.async_refresh()
+
+    async def async_assign(self, animal_id: str, enclosure_id: int | None) -> None:
+        """Dier in een kast zetten (of eruit halen) en de verhuis noteren."""
+        bundle = self._bundles.get(animal_id)
+        if bundle is None:
+            raise KeyError(animal_id)
+        old = bundle.animal.enclosure_id
+        if old == enclosure_id:
+            return
+        await self.hass.async_add_executor_job(
+            lambda: self.db.update_animal(animal_id, enclosure_id=enclosure_id)
+        )
+        code = lambda eid: (self.enclosures.get(eid) or {}).get("code") if eid else None  # noqa: E731
+        if bundle.animal.status in MONITORED_STATUSES:
+            await self.async_log(
+                [animal_id], "rehouse",
+                data={"from": code(old), "to": code(enclosure_id), "enclosure_id": enclosure_id},
+            )
+        else:
+            await self.async_refresh()
 
     def due_tasks(self) -> list[Task]:
         """Taken die vandaag of eerder vervallen (lokale tijd)."""
