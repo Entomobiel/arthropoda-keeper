@@ -277,4 +277,12 @@ pytest tests/ha                         # integratietests (pytest-homeassistant-
 
 ## Licentie
 
-[MIT](LICENSE) © 2026 Entomobiel. Je mag de code vrij gebruiken, aanpassen en verspreiden, mits vermelding van de oorspronkelijke auteur.
+Copyright © 2026 Entomobiel.
+
+Arthropoda Keeper is vrije software onder de [GNU General Public License versie 3](LICENSE) (GPL-3.0).
+
+- Je mag de code gebruiken, aanpassen en verspreiden.
+- Wie een (aangepaste) versie verspreidt, moet dat ook onder GPL-3.0 doen, met de volledige broncode en met vermelding van de oorspronkelijke auteur.
+- De software wordt geleverd zonder enige garantie.
+
+Versies tot en met commit `8f83226` (8 november 2026) werden onder de MIT-licentie gepubliceerd.
