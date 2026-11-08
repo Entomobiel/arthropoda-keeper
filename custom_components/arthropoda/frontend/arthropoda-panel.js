@@ -8,11 +8,11 @@ import {
   BASE_CSS, commonName, daysText, dueText, esc, fmtDate, fmtDateTime, fmtNum, getStore,
   navigate, nextTask, openAnimalDialog, openJournalDialog, quickLog, rangeBar, stageText, t, toast,
   feederFilter, field, isFeeder, openDialog, photoCredit, photoUrl,
-} from "./arthropoda-common.js";
+} from "./arthropoda-common.js?v=0.7.1";
 import {
   WORK_CSS, dims, getRound, openEnclosureDialog, openLabelsDialog, openNfcDialog, openRoundSummary,
   openTasks, renderWorkScreen, startRound, te,
-} from "./arthropoda-enclosures.js";
+} from "./arthropoda-enclosures.js?v=0.7.1";
 
 const CSS = `
   ${BASE_CSS}
