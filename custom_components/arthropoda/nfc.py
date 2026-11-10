@@ -3,8 +3,8 @@
 Werking (met de Home Assistant Companion-app):
 1. Schrijf een tag met de app (Instellingen → Companion-app → NFC-tags).
 2. Koppel hem in het paneel aan een kast (knop 'Tag koppelen' en de tag scannen).
-3. Scan je de tag, dan krijgt die gsm een melding; tikken opent het werkscherm
-   van de kast. Er vuurt ook de gebeurtenis `arthropoda_enclosure_scanned`,
+3. Scan je de tag met Android, dan opent de app meteen het werkscherm van de kast
+   (notify-commando `command_webview`); op iOS krijg je een melding om op te tikken. Er vuurt ook de gebeurtenis `arthropoda_enclosure_scanned`,
    zodat je er eigen automatiseringen aan kunt hangen.
 """
 
@@ -35,19 +35,26 @@ def deep_link(code: str) -> str:
     return f"homeassistant://navigate{work_screen_path(code)}"
 
 
-def _notify_service(hass: HomeAssistant, device_id: str | None) -> str | None:
-    """notify-dienst van de Companion-app die de tag scande."""
+def _notify_service(hass: HomeAssistant, device_id: str | None) -> tuple[str | None, bool]:
+    """notify-dienst van de Companion-app die de tag scande, en of het een Android-toestel is."""
     if not device_id:
-        return None
+        return None, False
     device = dr.async_get(hass).async_get(device_id)
     if device is None:
-        return None
+        return None, False
+    entry_id = getattr(device, "config_entry_id", None)
+    entry = hass.config_entries.async_get_entry(entry_id) if entry_id else None
+    android = (
+        entry is not None
+        and entry.domain == "mobile_app"
+        and str(entry.data.get("os_name", "")).lower() == "android"
+    )
     for name in (device.name_by_user, device.name):
         if name:
             service = f"mobile_app_{slugify(name)}"
             if hass.services.has_service("notify", service):
-                return service
-    return None
+                return service, android
+    return None, android
 
 
 @callback
@@ -71,10 +78,19 @@ def async_setup_nfc(hass: HomeAssistant, coordinator) -> callable:
             EVENT_ENCLOSURE_SCANNED,
             {"enclosure_id": enclosure["id"], "code": code, "device_id": device_id},
         )
-        service = _notify_service(hass, device_id)
+        service, android = _notify_service(hass, device_id)
         if service is None:
             return
         path = work_screen_path(code)
+        if android:
+            # Android: de app opent zichzelf meteen op het werkscherm, zonder te tikken.
+            # 'via=nfc': het scanbewijs is hierboven al genoteerd.
+            command = {"message": "command_webview", "data": {"command": f"{path}&via=nfc"}}
+            try:
+                await hass.services.async_call("notify", service, command, blocking=False)
+            except HomeAssistantError as err:
+                _LOGGER.warning("Werkscherm openen voor kast %s mislukt: %s", code, err)
+            return
         residents = [
             coordinator.data[a].animal.name for a in coordinator.residents(enclosure["id"])
             if a in (coordinator.data or {})

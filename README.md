@@ -90,9 +90,9 @@ Alles komt meteen in het dagboek.
 **NFC-tags** (aanbevolen: waterdichte NTAG215/216-stickers):
 1. Schrijf een tag met de HA-app: *Instellingen → Companion-app → NFC-tags → Tag schrijven*.
 2. Klik in het paneel bij de kast op **📶 NFC-tag** en scan de tag één keer.
-3. Voortaan: scan de tag, tik op de melding en het werkscherm opent.
+3. Voortaan: scan de tag. Op Android opent de HA-app meteen het werkscherm. Geef de app daarvoor de toestemming *Weergeven over andere apps*. Op iOS tik je op de melding.
 
-Op Android kan het in één stap: schrijf met de app *NFC Tools* de link die het NFC-venster toont (`homeassistant://navigate/arthropoda?enclosure=CODE`) op de tag.
+Een link met *NFC Tools* schrijven (`homeassistant://navigate/arthropoda?enclosure=CODE`) kan ook. Android toont dan eerst de link, waarop je moet tikken. De werkwijze met de HA-app is daarom handiger, en levert ook betrouwbaarder scanbewijs.
 Bij elke scan vuurt ook de gebeurtenis `arthropoda_enclosure_scanned`, voor eigen automatiseringen.
 
 **QR-etiketten:** *Kasten → 🖨 Etiketten afdrukken* maakt een A4-vel met per kast een QR-code, de code, de naam en de soorten. Je kiest uit 3×8 (63,5 × 38,1 mm), 2×7 (99,1 × 38,1 mm) of 3×7 (70 × 42,3 mm). De QR-code opent de HA-app rechtstreeks op het werkscherm. Gebruik waterbestendige vinylstickers of lamineer de etiketten.

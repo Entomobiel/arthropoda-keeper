@@ -171,3 +171,17 @@ async def test_nfc_tag_opens_work_screen(hass: HomeAssistant, hass_ws_client) ->
     hass.bus.async_fire("tag_scanned", {"tag_id": "ANDERE", "device_id": phone.id})
     await hass.async_block_till_done()
     assert len(notify) == 1
+
+    # Android-gsm → de app opent zichzelf op het werkscherm (geen melding om te tikken)
+    android_notify = async_mock_service(hass, "notify", "mobile_app_pixel")
+    android_entry = MockConfigEntry(domain="mobile_app", data={"os_name": "Android"})
+    android_entry.add_to_hass(hass)
+    pixel = dr.async_get(hass).async_get_or_create(
+        config_entry_id=android_entry.entry_id, identifiers={("mobile_app", "px")}, name="Pixel"
+    )
+    hass.bus.async_fire("tag_scanned", {"tag_id": "TAG-123", "device_id": pixel.id})
+    await hass.async_block_till_done()
+    (cmd,) = android_notify
+    assert cmd.data["message"] == "command_webview"
+    assert cmd.data["data"]["command"] == "/arthropoda?enclosure=T-07&via=nfc"
+    assert len(notify) == 1

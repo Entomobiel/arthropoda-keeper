@@ -4,8 +4,8 @@
 import {
   NUMBER, dueText, entityField, esc, field, fmtDate, fmtNum, getStore, openDialog,
   openJournalDialog, photoUrl, readForm, selectHtml, toast, wireMulti,
-} from "./arthropoda-common.js?v=0.9.0";
-import { qrSvg } from "./arthropoda-qr.js?v=0.9.0";
+} from "./arthropoda-common.js?v=0.9.1";
+import { qrSvg } from "./arthropoda-qr.js?v=0.9.1";
 
 const ENC_TYPES = ["terrarium", "faunabox", "breeding_box", "formicarium", "aquarium", "net_cage", "plant_cabinet", "other"];
 const ENC_STATUSES = ["in_use", "empty", "maintenance"];
