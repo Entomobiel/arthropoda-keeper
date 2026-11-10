@@ -2,7 +2,22 @@
 
 Home Assistant-integratie voor het houden van insecten, spinnen, schorpioenen, pissebedden en andere geleedpotigen, inclusief waterinsecten. Elk dier of elke kolonie wordt een eigen apparaat met klimaatbewaking, tellers en een dagboek, vergelijkbaar met de plant monitor.
 
-> **Status: versie 0.8** – kern, klimaat, opvolging, paneel/kaarten, AI-caresheets, foto's, kweek, voorraad, documenten, diapauze, kasten met NFC/QR, plantenkasten met Plant Monitor. Zie [docs/ONTWERP.md](docs/ONTWERP.md).
+> **Status: versie 0.9** – kern, klimaat, opvolging, paneel/kaarten, AI-caresheets, foto's, kweek, voorraad, documenten, diapauze, kasten met NFC/QR, plantenkasten met Plant Monitor, aandringen met scanbewijs. Zie [docs/ONTWERP.md](docs/ONTWERP.md).
+
+## Aandringen bij taken over tijd (fase 9)
+
+Inschakelen via **Instellingen → Apparaten & diensten → Arthropoda Keeper → Configureren → Aandringen bij taken over tijd**. Meldingen gaan naar de doelen uit *Instellingen*; gebruik `notify.mobile_app_<gsm>` voor knoppen en dringende meldingen.
+
+| Achterstand | Wat er gebeurt |
+|---|---|
+| Vervaldag | In de dagelijkse samenvatting |
+| Over tijd | Elke *x* uur een melding met de open taken, buiten de stille uren. Knoppen *Over 1 uur* en *Morgen* (maximaal *n* keer per taak). Bewust geen knop *Gedaan* |
+| *Dringend na* (standaard 2 dagen) | Melding op een eigen kanaal met hoge prioriteit, blijft staan en is niet weg te vegen (Android). Uitstellen kan niet meer |
+| *Speaker/lamp na* (standaard 3 dagen) | Daarbovenop een gesproken boodschap (`tts.speak`) op de gekozen speaker en een knipperende lamp |
+
+Zijn alle taken gedaan, dan wordt de melding automatisch van de gsm gehaald.
+
+**Scanbewijs:** een taak die over tijd is, kan pas afgehandeld worden als je kort ervoor (standaard 15 minuten) de **NFC-tag of QR-code van de kast** gescand hebt. Dat geldt voor elke manier van afvinken: werkscherm, paneel, kaarten, takenlijst en acties. Op de herinnering tikken of het werkscherm vanuit de app openen telt niet als scan. Het geldt voor kasten met een NFC-tag of die al eens gescand werden; dieren zonder kast kunnen niets bewijzen en worden niet tegengehouden.
 
 ## Plantenkasten en Plant Monitor (fase 8)
 

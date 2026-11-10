@@ -8,11 +8,11 @@ import {
   BASE_CSS, commonName, daysText, dueText, esc, fmtDate, fmtDateTime, fmtNum, getStore,
   navigate, nextTask, openAnimalDialog, openJournalDialog, quickLog, rangeBar, stageText, t, toast,
   feederFilter, field, isFeeder, openDialog, photoCredit, photoUrl,
-} from "./arthropoda-common.js?v=0.8.0";
+} from "./arthropoda-common.js?v=0.9.0";
 import {
   WORK_CSS, dims, getRound, openEnclosureDialog, openLabelsDialog, openNfcDialog, openRoundSummary,
   openTasks, renderWorkScreen, startRound, te,
-} from "./arthropoda-enclosures.js?v=0.8.0";
+} from "./arthropoda-enclosures.js?v=0.9.0";
 
 const CSS = `
   ${BASE_CSS}
@@ -422,7 +422,7 @@ class ArthropodaPanel extends HTMLElement {
             ${a.acquired_at ? `<div><span>${esc(t(h, "acquired_at"))}</span><span>${esc(fmtDate(h, a.acquired_at))}</span></div>` : ""}
             ${a.origin ? `<div><span>${esc(t(h, "origin"))}</span><span>${esc(L("origin", a.origin))}</span></div>` : ""}
             ${a.enclosure_id ? (() => { const enc = this._store.enclosure(a.enclosure_id);
-                return enc ? `<div><span>${esc(t(h, "enclosure"))}</span><span><a href="/arthropoda?enclosure=${esc(enc.code)}" data-nav>${esc(enc.code)}${enc.name ? ` – ${esc(enc.name)}` : ""}</a></span></div>` : ""; })() : ""}
+                return enc ? `<div><span>${esc(t(h, "enclosure"))}</span><span><a href="/arthropoda?enclosure=${esc(enc.code)}&via=app" data-nav>${esc(enc.code)}${enc.name ? ` – ${esc(enc.name)}` : ""}</a></span></div>` : ""; })() : ""}
             ${a.config.seller ? `<div><span>${esc(t(h, "seller"))}</span><span>${esc(a.config.seller)}</span></div>` : ""}
             ${a.config.price !== undefined && a.config.price !== null ? `<div><span>${esc(t(h, "price"))}</span><span>€ ${fmtNum(a.config.price, 2)}</span></div>` : ""}
             ${a.lineage?.generation ? `<div><span>${esc(t(h, "generation"))}</span><span>${esc(a.lineage.generation)}</span></div>` : ""}
@@ -672,12 +672,16 @@ class ArthropodaPanel extends HTMLElement {
     const btn = e.target.closest("button");
     if (btn?.hasAttribute("data-edit")) return openEnclosureDialog(this._hass, enc);
     if (btn?.hasAttribute("data-nfc")) return openNfcDialog(this._hass, enc);
-    navigate(`/arthropoda?enclosure=${encodeURIComponent(enc.code)}`);
+    navigate(`/arthropoda?enclosure=${encodeURIComponent(enc.code)}&via=app`);
   }
 
   _viewWork() {
     this.shadowRoot.querySelectorAll("nav button").forEach((b) =>
       b.classList.toggle("active", b.dataset.tab === "enclosures"));
+    // Geopend via de QR-code/NFC-link op de kast (niet vanuit de app zelf) = scanbewijs.
+    if (!new URLSearchParams(location.search).get("via")) {
+      this._hass.callWS({ type: "arthropoda/enclosure/scanned", code: this._encCode }).catch(() => {});
+    }
     this._workDraw = renderWorkScreen(this, this._main, this._hass, this._encCode, {
       onEdit: (enc) => openEnclosureDialog(this._hass, enc),
       onBack: () => navigate("/arthropoda?view=enclosures"),

@@ -141,6 +141,8 @@ class ArthropodaCoordinator(DataUpdateCoordinator[dict[str, AnimalSnapshot]]):
         # Planten in plantenkasten (zonder dieren) als leden van klimaatgroepen.
         self.plant_snapshots: dict[str, PlantSnapshot] = {}
         self.plant_last: dict[str, dict[str, str]] = {}
+        # Aandringen en scanbewijs (NagManager, gezet in __init__.py).
+        self.nag = None
         self._unsub_state: Callable[[], None] | None = None
 
     # --- configuratie -----------------------------------------------------
@@ -528,6 +530,9 @@ class ArthropodaCoordinator(DataUpdateCoordinator[dict[str, AnimalSnapshot]]):
         data: dict[str, Any] | None = None,
     ) -> list[int]:
         """Dagboekregel toevoegen, gevolgen toepassen en entiteiten bijwerken."""
+        if self.nag is not None:
+            # Taak over tijd? Dan eerst de kast scannen (ScanRequired).
+            self.nag.check_log_allowed(animal_ids, entry_type)
         ts = ts or dt_util.utcnow()
         data = data or {}
         group_id = None
@@ -572,6 +577,8 @@ class ArthropodaCoordinator(DataUpdateCoordinator[dict[str, AnimalSnapshot]]):
             await self.async_log([task.animal_id], task.journal_type, data={"source": "todo"})
             return
         if task.kind == "equipment":
+            if self.nag is not None:
+                self.nag.check_equipment_allowed(task)
             day = dt_util.now().date().isoformat()
             await self.hass.async_add_executor_job(
                 self.db.service_equipment, task.enclosure_id, task.index, day

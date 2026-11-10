@@ -22,7 +22,7 @@ from homeassistant.config_entries import ConfigEntryState, ConfigSubentry
 from homeassistant.const import CONF_NAME
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import config_validation as cv, entity_registry as er
-from homeassistant.helpers.dispatcher import async_dispatcher_connect
+from homeassistant.helpers.dispatcher import async_dispatcher_connect, async_dispatcher_send
 from homeassistant.helpers.translation import async_get_translations
 from homeassistant.util import dt as dt_util
 
@@ -34,6 +34,7 @@ from .const import (
     ACTUATOR_KEYS,
     CONF_COUNT,
     CONF_INSTAR,
+    CONF_REQUIRE_SCAN,
     CONF_SEX,
     CONF_SPECIES_ID,
     CONF_STAGE,
@@ -227,7 +228,7 @@ def serialize_enclosures(hass: HomeAssistant) -> list[dict[str, Any]]:
     _, runtime = _runtime(hass)
     if runtime is None:
         return []
-    coordinator, controller = runtime.coordinator, runtime.controller
+    coordinator, controller, nag = runtime.coordinator, runtime.controller, runtime.nag
     data = coordinator.data or {}
     tasks_by_enc: dict[int, list[dict[str, Any]]] = {}
     for task in coordinator.enclosure_tasks:
@@ -264,6 +265,15 @@ def serialize_enclosures(hass: HomeAssistant) -> list[dict[str, Any]]:
                         "water_temperature": readings.water_temperature,
                     }
                     if readings
+                    else None
+                ),
+                # Scanbewijs: recent gescand (taken over tijd mogen dan afgevinkt worden).
+                "scan": (
+                    {
+                        "required": bool(nag.enabled and nag.opt(CONF_REQUIRE_SCAN) and nag.verifiable(enc_id)),
+                        "recent": nag.scanned_recently(enc_id),
+                    }
+                    if nag is not None
                     else None
                 ),
                 "plants": plants,
@@ -1091,6 +1101,28 @@ async def ws_enclosure_log(hass: HomeAssistant, connection, msg) -> None:
     connection.send_result(msg["id"], {"entry_ids": entry_ids, "animals": ids})
 
 
+# --- scanbewijs (fase 9) ----------------------------------------------------------
+
+
+@websocket_api.websocket_command(
+    {vol.Required("type"): "arthropoda/enclosure/scanned", vol.Required("code"): str}
+)
+@websocket_api.async_response
+async def ws_enclosure_scanned(hass: HomeAssistant, connection, msg) -> None:
+    """Werkscherm geopend via de QR-code van een kast: geldt als aanwezigheid."""
+    _, runtime = _require(hass, connection, msg)
+    if runtime is None:
+        return
+    code = msg["code"].strip().lower()
+    enc = next((e for e in runtime.coordinator.enclosures.values() if e["code"].lower() == code), None)
+    if enc is None:
+        _error(connection, msg, "not_found", "Onbekende kast")
+        return
+    runtime.nag.note_scan(enc["id"])
+    async_dispatcher_send(hass, SIGNAL_UPDATE)
+    connection.send_result(msg["id"], {"enclosure_id": enc["id"]})
+
+
 # --- planten (fase 8) ----------------------------------------------------------
 
 
@@ -1203,6 +1235,7 @@ def async_register_websocket(hass: HomeAssistant) -> None:
         ws_enclosure_delete,
         ws_enclosure_assign,
         ws_enclosure_log,
+        ws_enclosure_scanned,
         ws_plant_log,
         ws_plant_journal,
         ws_plant_entry_delete,

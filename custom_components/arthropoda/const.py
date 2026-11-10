@@ -17,7 +17,7 @@ SIGNAL_UPDATE = "arthropoda_update"
 # Frontend
 PANEL_URL_PATH = "arthropoda"
 STATIC_URL = "/arthropoda_static"
-FRONTEND_VERSION = "0.8.0"
+FRONTEND_VERSION = "0.9.0"
 
 # --- Soortkenmerken -------------------------------------------------------
 
@@ -161,6 +161,31 @@ CONF_ALARM_DELAY_MINUTES = "alarm_delay_minutes"
 CONF_DIGEST_ENABLED = "digest_enabled"
 CONF_DIGEST_TIME = "digest_time"
 DEFAULT_DIGEST_TIME = "18:00:00"
+
+# Aandringen bij taken die over tijd zijn (zie nag.py)
+CONF_NAG_ENABLED = "nag_enabled"
+CONF_NAG_INTERVAL_HOURS = "nag_interval_hours"
+CONF_QUIET_START = "quiet_start"
+CONF_QUIET_END = "quiet_end"
+CONF_NAG_URGENT_DAYS = "nag_urgent_days"
+CONF_NAG_LOUD_DAYS = "nag_loud_days"
+CONF_NAG_MAX_SNOOZES = "nag_max_snoozes"
+CONF_NAG_MEDIA_PLAYER = "nag_media_player"
+CONF_NAG_TTS = "nag_tts"
+CONF_NAG_LIGHT = "nag_light"
+CONF_REQUIRE_SCAN = "require_scan"
+CONF_SCAN_MINUTES = "scan_minutes"
+NAG_DEFAULTS = {
+    CONF_NAG_ENABLED: False,
+    CONF_NAG_INTERVAL_HOURS: 3,
+    CONF_QUIET_START: "22:00:00",
+    CONF_QUIET_END: "08:00:00",
+    CONF_NAG_URGENT_DAYS: 2,
+    CONF_NAG_LOUD_DAYS: 3,
+    CONF_NAG_MAX_SNOOZES: 2,
+    CONF_REQUIRE_SCAN: True,
+    CONF_SCAN_MINUTES: 15,
+}
 
 LIGHT_MODES = ["fixed", "sun"]
 

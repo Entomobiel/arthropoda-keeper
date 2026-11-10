@@ -182,7 +182,30 @@
         "menu_options": {
           "add_species": "Add species",
           "import_caresheet": "Import caresheet (YAML)",
-          "settings": "Settings"
+          "settings": "Settings",
+          "reminders": "Nag about overdue tasks"
+        }
+      },
+      "reminders": {
+        "title": "Nag about overdue tasks",
+        "description": "The longer a task waits, the more urgent the reminder. Notifications go to the targets from Settings; use notify.mobile_app_… for buttons and urgent notifications on Android.",
+        "data": {
+          "nag_enabled": "Enable nagging",
+          "nag_interval_hours": "Repeat every (hours)",
+          "quiet_start": "Quiet hours from",
+          "quiet_end": "Quiet hours until",
+          "nag_max_snoozes": "Max snoozes per task",
+          "nag_urgent_days": "Urgent after (days overdue)",
+          "nag_loud_days": "Speaker/light after (days overdue)",
+          "nag_tts": "Speech service (tts)",
+          "nag_media_player": "Speaker",
+          "nag_light": "Light that flashes",
+          "require_scan": "Require a scan for overdue tasks",
+          "scan_minutes": "Scan valid for (minutes)"
+        },
+        "data_description": {
+          "nag_urgent_days": "The notification then stays on screen (cannot be swiped away), with sound on its own channel, and can no longer be snoozed.",
+          "require_scan": "An overdue task can only be completed after scanning the enclosure's NFC tag or QR code. Applies to enclosures with an NFC tag or that were scanned before."
         }
       },
       "settings": {

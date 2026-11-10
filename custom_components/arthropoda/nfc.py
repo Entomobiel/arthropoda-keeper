@@ -65,6 +65,8 @@ def async_setup_nfc(hass: HomeAssistant, coordinator) -> callable:
             return
         code = enclosure["code"]
         device_id = event.data.get("device_id")
+        if coordinator.nag is not None:
+            coordinator.nag.note_scan(enclosure["id"])  # bewijs: je stond bij de kast
         hass.bus.async_fire(
             EVENT_ENCLOSURE_SCANNED,
             {"enclosure_id": enclosure["id"], "code": code, "device_id": device_id},

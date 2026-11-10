@@ -590,6 +590,45 @@ def build(lang: int) -> dict:
                         "add_species": t("Soort toevoegen", "Add species"),
                         "import_caresheet": t("Caresheet importeren (YAML)", "Import caresheet (YAML)"),
                         "settings": t("Instellingen", "Settings"),
+                        "reminders": t("Aandringen bij taken over tijd", "Nag about overdue tasks"),
+                    },
+                },
+                "reminders": {
+                    "title": t("Aandringen bij taken over tijd", "Nag about overdue tasks"),
+                    "description": t(
+                        "Hoe langer een taak blijft liggen, hoe dringender de herinnering. "
+                        "Meldingen gaan naar de doelen uit Instellingen; gebruik notify.mobile_app_… "
+                        "voor knoppen en dringende meldingen op Android.",
+                        "The longer a task waits, the more urgent the reminder. Notifications go to "
+                        "the targets from Settings; use notify.mobile_app_… for buttons and urgent "
+                        "notifications on Android."),
+                    "data": {
+                        "nag_enabled": t("Aandringen inschakelen", "Enable nagging"),
+                        "nag_interval_hours": t("Herhalen elke (uren)", "Repeat every (hours)"),
+                        "quiet_start": t("Stille uren vanaf", "Quiet hours from"),
+                        "quiet_end": t("Stille uren tot", "Quiet hours until"),
+                        "nag_max_snoozes": t("Maximaal uitstellen per taak", "Max snoozes per task"),
+                        "nag_urgent_days": t("Dringend na (dagen te laat)", "Urgent after (days overdue)"),
+                        "nag_loud_days": t("Speaker/lamp na (dagen te laat)", "Speaker/light after (days overdue)"),
+                        "nag_tts": t("Spraakdienst (tts)", "Speech service (tts)"),
+                        "nag_media_player": t("Speaker", "Speaker"),
+                        "nag_light": t("Lamp die knippert", "Light that flashes"),
+                        "require_scan": t("Scanbewijs vereist voor taken over tijd",
+                                          "Require a scan for overdue tasks"),
+                        "scan_minutes": t("Scan geldig gedurende (minuten)", "Scan valid for (minutes)"),
+                    },
+                    "data_description": {
+                        "nag_urgent_days": t(
+                            "Dan blijft de melding op het scherm staan (niet weg te vegen), met geluid "
+                            "op een eigen kanaal, en kan ze niet meer uitgesteld worden.",
+                            "The notification then stays on screen (cannot be swiped away), with sound "
+                            "on its own channel, and can no longer be snoozed."),
+                        "require_scan": t(
+                            "Een taak die over tijd is, kan pas afgevinkt worden nadat je de NFC-tag of "
+                            "QR-code van de kast gescand hebt. Geldt voor kasten met een NFC-tag of die al "
+                            "eens gescand werden.",
+                            "An overdue task can only be completed after scanning the enclosure's NFC tag "
+                            "or QR code. Applies to enclosures with an NFC tag or that were scanned before."),
                     },
                 },
                 "settings": {

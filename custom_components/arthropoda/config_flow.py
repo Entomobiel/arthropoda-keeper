@@ -31,6 +31,19 @@ from .const import (
     CONF_DAY_START,
     CONF_DIGEST_ENABLED,
     CONF_DIGEST_TIME,
+    CONF_NAG_ENABLED,
+    CONF_NAG_INTERVAL_HOURS,
+    CONF_NAG_LIGHT,
+    CONF_NAG_LOUD_DAYS,
+    CONF_NAG_MAX_SNOOZES,
+    CONF_NAG_MEDIA_PLAYER,
+    CONF_NAG_TTS,
+    CONF_NAG_URGENT_DAYS,
+    CONF_QUIET_END,
+    CONF_QUIET_START,
+    CONF_REQUIRE_SCAN,
+    CONF_SCAN_MINUTES,
+    NAG_DEFAULTS,
     CONF_FAN,
     CONF_FOOD_PLANTS,
     CONF_HEATER,
@@ -148,13 +161,45 @@ class ArthropodaOptionsFlow(OptionsFlow):
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         return self.async_show_menu(
-            step_id="init", menu_options=["add_species", "import_caresheet", "settings"]
+            step_id="init", menu_options=["add_species", "import_caresheet", "settings", "reminders"]
         )
 
     def _runtime(self):
         if self.config_entry.state is not ConfigEntryState.LOADED:
             return None
         return self.config_entry.runtime_data
+
+    async def async_step_reminders(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """Aandringen bij taken over tijd en scanbewijs."""
+        optional = (CONF_NAG_TTS, CONF_NAG_MEDIA_PLAYER, CONF_NAG_LIGHT)
+        if user_input is not None:
+            options = {**self.config_entry.options, **user_input}
+            for key in optional:
+                if not user_input.get(key):  # leeggemaakt
+                    options.pop(key, None)
+            return self.async_create_entry(data=options)
+        opts = {**NAG_DEFAULTS, **self.config_entry.options}
+
+        def entity(domain: str) -> selector.EntitySelector:
+            return selector.EntitySelector(selector.EntitySelectorConfig(domain=domain))
+
+        schema = vol.Schema(
+            {
+                vol.Required(CONF_NAG_ENABLED, default=opts[CONF_NAG_ENABLED]): bool,
+                vol.Required(CONF_NAG_INTERVAL_HOURS, default=opts[CONF_NAG_INTERVAL_HOURS]): _number(0.5, 24, 0.5, "h"),
+                vol.Required(CONF_QUIET_START, default=opts[CONF_QUIET_START]): selector.TimeSelector(),
+                vol.Required(CONF_QUIET_END, default=opts[CONF_QUIET_END]): selector.TimeSelector(),
+                vol.Required(CONF_NAG_MAX_SNOOZES, default=opts[CONF_NAG_MAX_SNOOZES]): _number(0, 10),
+                vol.Required(CONF_NAG_URGENT_DAYS, default=opts[CONF_NAG_URGENT_DAYS]): _number(1, 30, 1, "d"),
+                vol.Required(CONF_NAG_LOUD_DAYS, default=opts[CONF_NAG_LOUD_DAYS]): _number(1, 30, 1, "d"),
+                vol.Optional(CONF_NAG_TTS, description=_suggested(opts, CONF_NAG_TTS)): entity("tts"),
+                vol.Optional(CONF_NAG_MEDIA_PLAYER, description=_suggested(opts, CONF_NAG_MEDIA_PLAYER)): entity("media_player"),
+                vol.Optional(CONF_NAG_LIGHT, description=_suggested(opts, CONF_NAG_LIGHT)): entity("light"),
+                vol.Required(CONF_REQUIRE_SCAN, default=opts[CONF_REQUIRE_SCAN]): bool,
+                vol.Required(CONF_SCAN_MINUTES, default=opts[CONF_SCAN_MINUTES]): _number(1, 240, 1, "min"),
+            }
+        )
+        return self.async_show_form(step_id="reminders", data_schema=schema)
 
     async def async_step_settings(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         if user_input is not None:

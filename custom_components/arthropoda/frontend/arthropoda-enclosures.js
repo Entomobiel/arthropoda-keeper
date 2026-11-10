@@ -4,8 +4,8 @@
 import {
   NUMBER, dueText, entityField, esc, field, fmtDate, fmtNum, getStore, openDialog,
   openJournalDialog, photoUrl, readForm, selectHtml, toast, wireMulti,
-} from "./arthropoda-common.js?v=0.8.0";
-import { qrSvg } from "./arthropoda-qr.js?v=0.8.0";
+} from "./arthropoda-common.js?v=0.9.0";
+import { qrSvg } from "./arthropoda-qr.js?v=0.9.0";
 
 const ENC_TYPES = ["terrarium", "faunabox", "breeding_box", "formicarium", "aquarium", "net_cage", "plant_cabinet", "other"];
 const ENC_STATUSES = ["in_use", "empty", "maintenance"];
@@ -30,6 +30,8 @@ const TEXTS = {
     p_watered: "Water gegeven", p_fertilized: "Bemest", p_pruned: "Gesnoeid", p_repotted: "Verpot",
     p_harvested: "Geoogst", p_pest: "Plaag", p_sown: "Gezaaid", p_note: "Notitie",
     no_plants_selected: "Kies minstens één plant.", last_watered: "laatst water", never: "nog nooit",
+    scan_ok: "Kast gescand ✓ – taken over tijd kun je nu afvinken.",
+    scan_needed: "Scan de NFC-tag of QR-code van deze kast om taken over tijd af te vinken.",
     plant_ok: "in orde", plant_problem: "probleem", today: "vandaag", yesterday: "gisteren", days_ago: "{n} dagen geleden",
     s_in_use: "In gebruik", s_empty: "Leeg", s_maintenance: "Onderhoud", all: "Alle kasten",
     work_screen: "Werkscherm", nfc: "NFC-tag", labels: "Etiketten afdrukken", start_round: "Ronde starten",
@@ -72,6 +74,8 @@ const TEXTS = {
     p_watered: "Watered", p_fertilized: "Fertilized", p_pruned: "Pruned", p_repotted: "Repotted",
     p_harvested: "Harvested", p_pest: "Pest", p_sown: "Sown", p_note: "Note",
     no_plants_selected: "Select at least one plant.", last_watered: "last watered", never: "never",
+    scan_ok: "Enclosure scanned ✓ – you can now complete overdue tasks.",
+    scan_needed: "Scan this enclosure's NFC tag or QR code to complete overdue tasks.",
     plant_ok: "ok", plant_problem: "problem", today: "today", yesterday: "yesterday", days_ago: "{n} days ago",
     s_in_use: "In use", s_empty: "Empty", s_maintenance: "Maintenance", all: "All enclosures",
     work_screen: "Work screen", nfc: "NFC tag", labels: "Print labels", start_round: "Start round",
@@ -505,6 +509,8 @@ export function renderWorkScreen(host, box, hass, code, { onEdit, onBack }) {
         <button class="ak" data-edit-enc>⚙</button>
       </div>
       ${r ? `<div class="climate">${r.temperature !== null ? `🌡 ${fmtNum(r.temperature)} °C` : ""}${r.humidity !== null ? `💧 ${fmtNum(r.humidity, 0)} %` : ""}${r.water_temperature !== null ? `🌊 ${fmtNum(r.water_temperature)} °C` : ""}</div>` : ""}
+      ${enc.scan?.required && tasks.some((tk) => new Date(tk.due) < new Date(new Date().setHours(0, 0, 0, 0)))
+        ? `<div class="chip ${enc.scan.recent ? "ok" : "problem"}" style="margin-top:8px;white-space:normal">${enc.scan.recent ? "📶 " + esc(te(hass, "scan_ok")) : "📶 " + esc(te(hass, "scan_needed"))}</div>` : ""}
       ${enc.too_small_for?.length ? `<div class="chip problem" style="margin-top:8px">⚠ ${esc(te(hass, "too_small"))}: ${esc(enc.too_small_for.join(", "))}</div>` : ""}
       ${residents.length ? `<div class="residents">${residents.map((a) => {
         const p = photoUrl(hass, a);
