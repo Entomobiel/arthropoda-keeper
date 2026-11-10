@@ -8,11 +8,11 @@ import {
   BASE_CSS, commonName, daysText, dueText, esc, fmtDate, fmtDateTime, fmtNum, getStore,
   navigate, nextTask, openAnimalDialog, openJournalDialog, quickLog, rangeBar, stageText, t, toast,
   feederFilter, field, isFeeder, openDialog, photoCredit, photoUrl,
-} from "./arthropoda-common.js?v=0.7.1";
+} from "./arthropoda-common.js?v=0.8.0";
 import {
   WORK_CSS, dims, getRound, openEnclosureDialog, openLabelsDialog, openNfcDialog, openRoundSummary,
   openTasks, renderWorkScreen, startRound, te,
-} from "./arthropoda-enclosures.js?v=0.7.1";
+} from "./arthropoda-enclosures.js?v=0.8.0";
 
 const CSS = `
   ${BASE_CSS}
@@ -627,18 +627,20 @@ class ArthropodaPanel extends HTMLElement {
     const h = this._hass;
     const q = (this._encSearch || "").toLowerCase();
     const filter = this._encFilter || "all";
+    const isEmpty = (e) => e.empty && !(e.plants || []).length;
     const list = (this._store.enclosures || []).filter((e) => {
-      if (filter === "empty" && !e.empty) return false;
-      if (filter === "in_use" && (e.empty || e.status === "maintenance")) return false;
+      if (filter === "empty" && !isEmpty(e)) return false;
+      if (filter === "in_use" && (isEmpty(e) || e.status === "maintenance")) return false;
       if (filter === "maintenance" && e.status !== "maintenance") return false;
-      const names = (e.residents || []).map((id) => this._store.animal(id)?.name || "").join(" ");
+      const names = [...(e.residents || []).map((id) => this._store.animal(id)?.name || ""),
+        ...(e.plants || []).map((p) => p.name)].join(" ");
       return !q || [e.code, e.name, e.location, names].some((v) => (v || "").toLowerCase().includes(q));
     });
     if (!this._store.enclosures) { box.innerHTML = `<div class="empty">…</div>`; return; }
     if (!list.length) { box.innerHTML = `<div class="empty">${esc(te(h, "empty_list"))}</div>`; return; }
     box.innerHTML = list.map((e) => {
       const due = openTasks(this._store, e).length;
-      const status = e.status === "maintenance" ? "maintenance" : e.empty ? "empty" : "in_use";
+      const status = e.status === "maintenance" ? "maintenance" : isEmpty(e) ? "empty" : "in_use";
       const r = e.readings;
       return `<div class="card tile" data-enc="${esc(e.code)}">
         <div class="row"><div class="grow"><div class="enc-code">${esc(e.code)}</div>
@@ -651,6 +653,8 @@ class ArthropodaPanel extends HTMLElement {
           <div><span>${esc(te(h, "tasks_today"))}</span><span>${due ? `<b>${due}</b>` : "–"}</span></div>
         </div>
         ${(e.residents || []).length ? `<div class="small">${e.residents.map((id) => this._link(id)).join(", ")}</div>` : ""}
+        ${(e.plants || []).length ? `<div class="small">🌿 ${e.plants.map((p) => `<span class="${p.state === "problem" ? "problem-text" : ""}">${esc(p.name)}${p.state === "problem" ? " ⚠" : ""}</span>`).join(", ")}</div>` : ""}
+        ${e.plant_cabinet ? `<div><span class="chip ok">🌿 ${esc(te(h, "steers_plants"))}</span></div>` : ""}
         ${e.too_small_for?.length ? `<div class="chip problem">⚠ ${esc(te(h, "too_small"))}: ${esc(e.too_small_for.join(", "))}</div>` : ""}
         <div class="actions">
           <button class="ak primary" data-work>▶ ${esc(te(h, "work_screen"))}</button>

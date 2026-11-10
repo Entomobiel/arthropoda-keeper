@@ -4,10 +4,10 @@
 import {
   NUMBER, dueText, entityField, esc, field, fmtDate, fmtNum, getStore, openDialog,
   openJournalDialog, photoUrl, readForm, selectHtml, toast, wireMulti,
-} from "./arthropoda-common.js?v=0.7.1";
-import { qrSvg } from "./arthropoda-qr.js?v=0.7.1";
+} from "./arthropoda-common.js?v=0.8.0";
+import { qrSvg } from "./arthropoda-qr.js?v=0.8.0";
 
-const ENC_TYPES = ["terrarium", "faunabox", "breeding_box", "formicarium", "aquarium", "net_cage", "other"];
+const ENC_TYPES = ["terrarium", "faunabox", "breeding_box", "formicarium", "aquarium", "net_cage", "plant_cabinet", "other"];
 const ENC_STATUSES = ["in_use", "empty", "maintenance"];
 
 const TEXTS = {
@@ -21,7 +21,16 @@ const TEXTS = {
     equipment_name: "Toestel (bv. UV-lamp)", interval_days: "Vervangen/reinigen elke … dagen",
     serviced_at: "Laatst vervangen/gereinigd", add_equipment: "Toestel toevoegen", residents: "Bewoners",
     t_terrarium: "Terrarium", t_faunabox: "Faunabox", t_breeding_box: "Kweekbak", t_formicarium: "Formicarium",
-    t_aquarium: "Aquarium", t_net_cage: "Gaaskooi", t_other: "Andere",
+    t_aquarium: "Aquarium", t_net_cage: "Gaaskooi", t_plant_cabinet: "Plantenkast", t_other: "Andere",
+    plants_section: "Planten (Plant Monitor)", plants_field: "Planten in deze kast", light_hours: "Daglengte voor de planten (uren)",
+    plant_climate: "Klimaat sturen op de grenswaarden van de planten",
+    plants_note: "Zonder dieren in de kast stuurt de kast op de min/max-waarden die je in Plant Monitor bij elke plant instelt (overlap van alle planten). Zitten er dieren in, dan zijn de planten voedsel en telt alleen het klimaat van de dieren.",
+    no_plants: "Geen planten gevonden. Installeer Plant Monitor (Marketplace) en maak eerst planten aan.",
+    steers_plants: "Stuurt op planten", target: "Doel", plants_title: "Planten",
+    p_watered: "Water gegeven", p_fertilized: "Bemest", p_pruned: "Gesnoeid", p_repotted: "Verpot",
+    p_harvested: "Geoogst", p_pest: "Plaag", p_sown: "Gezaaid", p_note: "Notitie",
+    no_plants_selected: "Kies minstens één plant.", last_watered: "laatst water", never: "nog nooit",
+    plant_ok: "in orde", plant_problem: "probleem", today: "vandaag", yesterday: "gisteren", days_ago: "{n} dagen geleden",
     s_in_use: "In gebruik", s_empty: "Leeg", s_maintenance: "Onderhoud", all: "Alle kasten",
     work_screen: "Werkscherm", nfc: "NFC-tag", labels: "Etiketten afdrukken", start_round: "Ronde starten",
     finish_round: "Ronde afronden", next_enclosure: "Volgende kast", round: "Ronde",
@@ -54,7 +63,16 @@ const TEXTS = {
     equipment_name: "Device (e.g. UV lamp)", interval_days: "Replace/clean every … days",
     serviced_at: "Last replaced/cleaned", add_equipment: "Add device", residents: "Residents",
     t_terrarium: "Terrarium", t_faunabox: "Faunabox", t_breeding_box: "Breeding box", t_formicarium: "Formicarium",
-    t_aquarium: "Aquarium", t_net_cage: "Mesh cage", t_other: "Other",
+    t_aquarium: "Aquarium", t_net_cage: "Mesh cage", t_plant_cabinet: "Plant cabinet", t_other: "Other",
+    plants_section: "Plants (Plant Monitor)", plants_field: "Plants in this enclosure", light_hours: "Day length for the plants (hours)",
+    plant_climate: "Control the climate on the plants' thresholds",
+    plants_note: "Without animals in the enclosure, it is controlled on the min/max values you set for each plant in Plant Monitor (overlap of all plants). With animals inside, the plants are food and only the animals' climate counts.",
+    no_plants: "No plants found. Install Plant Monitor (Marketplace) and create plants first.",
+    steers_plants: "Controlled by plants", target: "Target", plants_title: "Plants",
+    p_watered: "Watered", p_fertilized: "Fertilized", p_pruned: "Pruned", p_repotted: "Repotted",
+    p_harvested: "Harvested", p_pest: "Pest", p_sown: "Sown", p_note: "Note",
+    no_plants_selected: "Select at least one plant.", last_watered: "last watered", never: "never",
+    plant_ok: "ok", plant_problem: "problem", today: "today", yesterday: "yesterday", days_ago: "{n} days ago",
     s_in_use: "In use", s_empty: "Empty", s_maintenance: "Maintenance", all: "All enclosures",
     work_screen: "Work screen", nfc: "NFC tag", labels: "Print labels", start_round: "Start round",
     finish_round: "Finish round", next_enclosure: "Next enclosure", round: "Round",
@@ -134,6 +152,15 @@ export function openEnclosureDialog(hass, enc = null) {
           return `<span class="chip" data-value="${esc(id)}">${esc(a?.name || id)}<button type="button" data-remove>×</button></span>`;
         }).join("")}</div>${selectHtml("", animalOptions, "", true, "+ …")}</div>`, true)}
       </div></fieldset>
+      <fieldset><legend>${esc(te(hass, "plants_section"))}</legend>
+        <p style="margin:0 0 8px;font-size:.85em;color:var(--secondary-text-color)">${esc(te(hass, "plants_note"))}</p>
+        <div class="ak-grid">
+        ${Object.keys(hass.states).some((id) => id.startsWith("plant.")) || (cfg.plants || []).length
+          ? entityField(hass, "plants", te(hass, "plants_field"), ["plant"], cfg.plants || [], { multiple: true })
+          : `<div class="ak-field wide"><span>${esc(te(hass, "plants_field"))}</span><span>${esc(te(hass, "no_plants"))}</span></div>`}
+        ${field(te(hass, "light_hours"), NUMBER("light_hours", cfg.light_hours, 0.5))}
+        ${field(te(hass, "plant_climate"), `<input type="checkbox" name="plant_climate" ${cfg.plant_climate === false ? "" : "checked"}>`)}
+      </div></fieldset>
       <fieldset><legend>${esc(te(hass, "climate"))}</legend>
         <p style="margin:0 0 8px;font-size:.85em;color:var(--secondary-text-color)">${esc(te(hass, "climate_note"))}</p>
         <div class="ak-grid">
@@ -177,6 +204,7 @@ export function openEnclosureDialog(hass, enc = null) {
       "lights", "fan", "water_heater", "pumps", "hysteresis", "mist_seconds", "mist_pause_minutes",
       "mist_max_per_day", "light_ramp_minutes", "mist_times"];
     const config = Object.fromEntries(climateKeys.map((k) => [k, data[k]]));
+    Object.assign(config, { plants: data.plants || [], light_hours: data.light_hours, plant_climate: data.plant_climate !== false });
     const equipment = [...body.querySelectorAll(".ak-eq")].map((row) => {
       const get = (k) => row.querySelector(`[data-eq="${k}"]`).value;
       return { name: get("name") || null, interval_days: get("interval_days") ? Number(get("interval_days")) : null,
@@ -391,9 +419,58 @@ export const WORK_CSS = `
                        color: var(--ak-ok); font-size: 1.2em; cursor: pointer; }
   .work .roundbar { display:flex; gap:8px; align-items:center; flex-wrap:wrap; padding: 10px 12px; border-radius: 12px;
                     background: color-mix(in srgb, var(--ak-accent) 12%, transparent); margin-bottom: 12px; }
+  .work .plants { display:flex; flex-direction:column; gap:6px; margin: 8px 0 4px; }
+  .work .plant { display:flex; align-items:center; gap:10px; padding: 6px 10px 6px 6px; border-radius: 14px; text-align:left;
+                 border: 2px solid var(--ak-line); background: var(--card-background-color,#fff); cursor:pointer; font: inherit;
+                 color: var(--primary-text-color); }
+  .work .plant.on { border-color: var(--ak-ok); background: color-mix(in srgb, var(--ak-ok) 10%, transparent); }
+  .work .plant img, .work .plant .ph { width: 40px; height: 40px; border-radius: 10px; object-fit: cover; flex: none;
+               background: var(--secondary-background-color); display:inline-flex; align-items:center; justify-content:center; }
+  .work .plant .bad { color: var(--ak-problem, #c62828); }
   .work .climate { display:flex; gap: 16px; font-size: 1.1em; flex-wrap: wrap; }
   @media (max-width: 420px) { .work .big { grid-template-columns: repeat(2, 1fr); } .work .wcode { font-size: 1.6em; } }
 `;
+
+const PLANT_ACTIONS = [
+  ["watered", "💧"], ["fertilized", "🧪"], ["pruned", "✂️"], ["harvested", "🧺"],
+  ["repotted", "🪴"], ["pest", "🐛"], ["sown", "🌱"], ["note", "📝"],
+];
+
+function daysAgo(hass, iso) {
+  if (!iso) return te(hass, "never");
+  const start = new Date(); start.setHours(0, 0, 0, 0);
+  const then = new Date(iso); then.setHours(0, 0, 0, 0);
+  const days = Math.round((start - then) / 86400000);
+  if (days <= 0) return te(hass, "today");
+  if (days === 1) return te(hass, "yesterday");
+  return te(hass, "days_ago", { n: days });
+}
+
+/** Plantenblok van het werkscherm: planten (aan/uit te vinken) en handelingen. */
+export function plantsHtml(hass, enc, selectedPlants) {
+  const plants = enc.plants || [];
+  if (!plants.length) return "";
+  const unit = (role) => (role === "heater" ? " °C" : " %");
+  const targets = (enc.actuators || []).filter((a) => a.target).map((a) =>
+    `${a.role === "heater" ? "🌡" : "💧"} ${fmtNum(a.target[0])}–${fmtNum(a.target[1])}${unit(a.role)}${a.conflict ? " ⚠" : ""}`);
+  return `<div class="card" style="margin-top:12px"><h3>🌿 ${esc(te(hass, "plants_title"))}
+      ${enc.plant_cabinet ? `<span class="chip ok" style="margin-left:6px">${esc(te(hass, "steers_plants"))}</span>` : ""}</h3>
+    ${enc.plant_cabinet && targets.length ? `<div class="muted small">${esc(te(hass, "target"))}: ${esc([...new Set(targets)].join(" · "))}</div>` : ""}
+    <div class="plants">${plants.map((p) => {
+      // Problemen van Plant Monitor; anders de afwijkende statussen (bv. moisture: Low).
+      const issues = (p.problems || []).length ? p.problems
+        : Object.entries(p.statuses || {}).map(([k, v]) => `${k} ${String(v).toLowerCase()}`);
+      const bad = p.state === "problem" || issues.length > 0;
+      return `<button class="plant ${selectedPlants.has(p.entity_id) ? "on" : ""}" data-plant="${esc(p.entity_id)}">
+        ${p.picture ? `<img src="${esc(p.picture)}" alt="">` : `<span class="ph">🌿</span>`}
+        <span class="grow"><b>${esc(p.name)}</b>${p.species ? ` <i class="muted small">${esc(p.species)}</i>` : ""}
+          <span class="small ${bad ? "bad" : "muted"}" style="display:block">${bad ? `⚠ ${esc(issues.join(", ") || te(hass, "plant_problem"))}` : `✓ ${esc(te(hass, "plant_ok"))}`}
+            · ${esc(te(hass, "last_watered"))}: ${esc(daysAgo(hass, p.last?.watered))}</span></span></button>`;
+    }).join("")}</div>
+    <div class="big">${PLANT_ACTIONS.map(([type, icon]) =>
+      `<button data-pact="${type}"><span>${icon}</span>${esc(te(hass, `p_${type}`))}</button>`).join("")}</div>
+  </div>`;
+}
 
 const BIG_ACTIONS = [
   ["feeding", "🍽", "fed"], ["misting_manual", "💧", "misted"], ["spot_clean", "🧹", "cleaned"],
@@ -404,6 +481,7 @@ const BIG_ACTIONS = [
 export function renderWorkScreen(host, box, hass, code, { onEdit, onBack }) {
   const store = getStore(hass);
   let selected = null;
+  let selectedPlants = null;
   let doneLocally = new Set();
 
   const draw = () => {
@@ -412,6 +490,7 @@ export function renderWorkScreen(host, box, hass, code, { onEdit, onBack }) {
     if (!enc) { box.innerHTML = `<div class="empty">${esc(te(hass, "unknown_enclosure", { code }))}</div>`; return; }
     const residents = (enc.residents || []).map((id) => store.animal(id)).filter(Boolean);
     if (selected === null) selected = new Set(residents.map((a) => a.id));
+    if (selectedPlants === null) selectedPlants = new Set((enc.plants || []).map((p) => p.entity_id));
     const round = getRound();
     if (round && !round.visited[enc.code]) noteRound(enc.code);
     const tasks = openTasks(store, enc);
@@ -438,7 +517,8 @@ export function renderWorkScreen(host, box, hass, code, { onEdit, onBack }) {
         <button data-photo><span>📷</span>${esc(te(hass, "photo"))}</button>
         <button data-more><span>⋯</span>${esc(te(hass, "more"))}</button>
       </div>
-      <input type="file" accept="image/*" capture="environment" data-file hidden>` : `<p class="muted">${esc(te(hass, "no_residents"))}</p>`}
+      <input type="file" accept="image/*" capture="environment" data-file hidden>` : (enc.plants || []).length ? "" : `<p class="muted">${esc(te(hass, "no_residents"))}</p>`}
+      ${plantsHtml(hass, enc, selectedPlants)}
       <div class="card"><h3>${esc(te(hass, "tasks_today"))}</h3>
         ${tasks.length ? tasks.map((tk) => `<div class="task"><button data-task="${esc(tk.uid)}" title="✓">✓</button>
           <div class="grow"><b>${esc(tk.label || taskLabel(hass, tk.kind))}</b><div class="muted small">${esc(tk.target)} · ${esc(dueText(hass, tk.due))}</div></div></div>`).join("")
@@ -452,14 +532,38 @@ export function renderWorkScreen(host, box, hass, code, { onEdit, onBack }) {
   const loadLast = async (enc, residents) => {
     const target = box.querySelector("[data-last]");
     if (!target) return;
-    if (!residents.length) { target.textContent = "–"; return; }
+    const plants = enc.plants || [];
+    if (!residents.length && !plants.length) { target.textContent = "–"; return; }
     try {
       const lists = await Promise.all(residents.slice(0, 6).map((a) =>
         hass.callWS({ type: "arthropoda/journal/list", animal_id: a.id, limit: 5 })));
       const names = Object.fromEntries(residents.map((a) => [a.id, a.name]));
-      const entries = lists.flatMap((l) => l.entries).sort((x, y) => y.timestamp.localeCompare(x.timestamp)).slice(0, 6);
-      target.innerHTML = entries.map((en) => `<div style="padding:3px 0">${esc(fmtDate(hass, en.timestamp))} · <b>${esc(store.label("entry_type", en.type))}</b> · ${esc(names[en.animal_id] || "")}</div>`).join("") || "–";
+      const rows = lists.flatMap((l) => l.entries).map((en) => ({
+        ts: en.timestamp, label: store.label("entry_type", en.type), who: names[en.animal_id] || "" }));
+      if (plants.length) {
+        const plantNames = Object.fromEntries(plants.map((p) => [p.entity_id, p.name]));
+        const { entries } = await hass.callWS({ type: "arthropoda/plant/journal", plants: plants.map((p) => p.entity_id), limit: 8 });
+        rows.push(...entries.map((en) => ({ ts: en.ts, label: `🌿 ${te(hass, `p_${en.type}`)}`,
+          who: plantNames[en.plant] || en.plant, notes: en.notes })));
+      }
+      rows.sort((x, y) => y.ts.localeCompare(x.ts));
+      target.innerHTML = rows.slice(0, 8).map((r) => `<div style="padding:3px 0">${esc(fmtDate(hass, r.ts))} · <b>${esc(r.label)}</b> · ${esc(r.who)}${r.notes ? ` <span class="muted">– ${esc(r.notes)}</span>` : ""}</div>`).join("") || "–";
     } catch { target.textContent = "–"; }
+  };
+
+  const logPlants = async (entryType) => {
+    const enc = store.enclosure(code);
+    const plants = [...selectedPlants];
+    if (!plants.length) { toast(host, te(hass, "no_plants_selected")); return; }
+    let notes = null;
+    if (entryType === "note" || entryType === "pest") {
+      notes = prompt(te(hass, `p_${entryType}`));
+      if (entryType === "note" && !notes) return;
+    }
+    await hass.callWS({ type: "arthropoda/plant/log", plants, entry_type: entryType, enclosure_id: enc.id, notes });
+    noteRound(enc.code, te(hass, `p_${entryType}`));
+    toast(host, `${te(hass, `p_${entryType}`)} ✓`);
+    draw();
   };
 
   const log = async (entryType, extra = {}) => {
@@ -478,7 +582,12 @@ export function renderWorkScreen(host, box, hass, code, { onEdit, onBack }) {
     if (!btn) return;
     const enc = store.enclosure(code);
     try {
-      if (btn.dataset.res) {
+      if (btn.dataset.plant) {
+        selectedPlants.has(btn.dataset.plant) ? selectedPlants.delete(btn.dataset.plant) : selectedPlants.add(btn.dataset.plant);
+        draw();
+      } else if (btn.dataset.pact) {
+        await logPlants(btn.dataset.pact);
+      } else if (btn.dataset.res) {
         selected.has(btn.dataset.res) ? selected.delete(btn.dataset.res) : selected.add(btn.dataset.res);
         draw();
       } else if (btn.dataset.act) {

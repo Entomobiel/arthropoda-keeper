@@ -2,7 +2,20 @@
 
 Home Assistant-integratie voor het houden van insecten, spinnen, schorpioenen, pissebedden en andere geleedpotigen, inclusief waterinsecten. Elk dier of elke kolonie wordt een eigen apparaat met klimaatbewaking, tellers en een dagboek, vergelijkbaar met de plant monitor.
 
-> **Status: versie 0.7** – kern, klimaat, opvolging, paneel/kaarten, AI-caresheets, foto's, kweek, voorraad, documenten, diapauze, kasten met NFC/QR. Zie [docs/ONTWERP.md](docs/ONTWERP.md).
+> **Status: versie 0.8** – kern, klimaat, opvolging, paneel/kaarten, AI-caresheets, foto's, kweek, voorraad, documenten, diapauze, kasten met NFC/QR, plantenkasten met Plant Monitor. Zie [docs/ONTWERP.md](docs/ONTWERP.md).
+
+## Plantenkasten en Plant Monitor (fase 8)
+
+Planten uit [Plant Monitor](https://github.com/Olen/homeassistant-plant) (`plant.*`) kunnen in een kast staan, naast of zonder dieren.
+
+- **Kast wijzigen → Planten:** kies de planten. Type *Plantenkast* is er voor kasten die alleen planten kweken.
+- **Sturing op de planten:** zitten er **geen dieren** in de kast, dan stuurt de kast haar verwarming, vernevelaar, ventilator en verlichting op de **min/max-grenswaarden die je in Plant Monitor** bij elke plant instelt (temperatuur en luchtvochtigheid). Bij meerdere planten geldt de overlap; overlappen ze niet, dan krijg je een reparatiemelding.
+  - *Daglengte voor de planten* (uren) bepaalt hoe lang de verlichting aan blijft, vanaf het dagbegin uit de integratie-opties.
+  - Uitvinkbaar per kast (*Klimaat sturen op de grenswaarden van de planten*).
+- **Zitten er dieren in**, dan zijn de planten voedsel: alleen het klimaat van de dieren telt. Zo kan een plant naar een kweekbak verhuizen om opgegeten te worden.
+- **Werkscherm:** de planten met hun toestand uit Plant Monitor (in orde of probleem, wanneer laatst water) en knoppen *Water gegeven, Bemest, Gesnoeid, Geoogst, Verpot, Plaag, Gezaaid, Notitie*. Tik een plant aan of uit om de handeling alleen voor bepaalde planten te noteren.
+- **Plantendagboek:** handelingen staan in een eigen tabel (database v4, automatische migratie met reservekopie `arthropoda.db.bak-v3`). Bij elke handeling vuurt de gebeurtenis `arthropoda_plant_entry`.
+- Grenswaarden worden via het entiteitenregister gevonden, dus hernoemde entiteiten blijven werken.
 
 ## Kweek, voorraad, groei en documenten (fase 6)
 
@@ -227,7 +240,9 @@ Bij *Dier toevoegen* / *Dier wijzigen* kies je in de stap **Klimaatsturing** wat
 
 ## Installatie
 
-**Via HACS (aanbevolen):** HACS → ⋮ → *Aangepaste repositories* → URL van deze repo, type *Integratie* → installeren → HA herstarten.
+**Via de Marketplace (Home Assistant 2026.11 en nieuwer, aanbevolen):** Instellingen → Marketplace → *Add from link* → `Entomobiel/arthropoda-keeper` (koppel je GitHub-account als daarom gevraagd wordt) → installeren → HA herstarten. Updates verschijnen daarna onder Instellingen → Updates.
+
+**Via HACS (oudere Home Assistant):** HACS → ⋮ → *Aangepaste repositories* → URL van deze repo, type *Integratie* → installeren → HA herstarten.
 
 **Handmatig:** kopieer `custom_components/arthropoda` naar `/config/custom_components/arthropoda` en herstart HA.
 

@@ -8,6 +8,8 @@ Werking:
 - Dieren met de schakelaar 'Klimaatsturing' uit, of die niet (meer) actief
   zijn, tellen niet mee. Blijft er niemand over, dan wordt de actuator niet
   aangeraakt.
+- Planten in een plantenkast (zonder dieren) tellen als leden, met de
+  grenswaarden uit Plant Monitor als doelbereik (zie plants.py).
 - De regelaar beslist bij elke sensorwijziging en elke 30 seconden.
 """
 
@@ -198,10 +200,17 @@ class ClimateController:
 
     # --- groepen ----------------------------------------------------------
 
+    def _member(self, member_id: str):
+        """Snapshot van een dier of een plant."""
+        if member_id in (self.coordinator.data or {}):
+            return self.coordinator.data[member_id]
+        return self.coordinator.plant_snapshots.get(member_id)
+
     def _groups(self) -> dict[tuple[str, str], list[str]]:
-        """(rol, entity_id) -> dier-ids, in vaste volgorde."""
+        """(rol, entity_id) -> leden (dieren en planten), in vaste volgorde."""
         groups: dict[tuple[str, str], list[str]] = {}
-        configs = self.coordinator.effective_configs or self.coordinator.animal_configs
+        configs = dict(self.coordinator.effective_configs or self.coordinator.animal_configs)
+        configs.update({pid: snap.config for pid, snap in self.coordinator.plant_snapshots.items()})
         for animal_id, cfg in sorted(configs.items()):
             for role in ROLE_ORDER:
                 value = cfg.get(role)
@@ -223,7 +232,7 @@ class ClimateController:
     # --- beslissen --------------------------------------------------------
 
     async def async_evaluate(self) -> None:
-        if self._busy or not self.coordinator.data:
+        if self._busy or (not self.coordinator.data and not self.coordinator.plant_snapshots):
             return
         self._busy = True
         try:
@@ -231,13 +240,8 @@ class ClimateController:
             results: dict[str, GroupResult] = {}
             conflicts: set[str] = set()
             for (role, entity_id), animal_ids in self._groups().items():
-                active = [
-                    self.coordinator.data[a]
-                    for a in animal_ids
-                    if a in self.coordinator.data
-                    and self.coordinator.data[a].monitored
-                    and self.coordinator.data[a].climate_enabled
-                ]
+                members = [self._member(a) for a in animal_ids]
+                active = [m for m in members if m is not None and m.monitored and m.climate_enabled]
                 result = await self._evaluate_group(role, entity_id, active, now)
                 result.members = animal_ids
                 results[entity_id] = result
@@ -473,9 +477,9 @@ class ClimateController:
     def _update_issues(self, conflicts: set[str], results: dict[str, GroupResult]) -> None:
         for entity_id in conflicts - self._conflicts:
             names = ", ".join(
-                self.coordinator.data[a].animal.name
+                member.animal.name
                 for a in results[entity_id].members
-                if a in self.coordinator.data
+                if (member := self._member(a)) is not None
             )
             ir.async_create_issue(
                 self.hass,

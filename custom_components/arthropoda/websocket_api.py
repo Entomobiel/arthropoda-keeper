@@ -51,6 +51,15 @@ from .const import (
 )
 from .db import SpeciesExistsError
 from .journal import ENTRY_TYPES
+from .plants import (
+    CONF_LIGHT_HOURS,
+    CONF_PLANT_CLIMATE,
+    CONF_PLANTS,
+    PLANT_ENTRY_TYPES,
+    plant_info,
+)
+
+EVENT_PLANT_ENTRY = "arthropoda_plant_entry"
 
 STATIC_UI_KEYS = (
     CONF_NAME, CONF_SPECIES_ID, "kind", "born_at", "acquired_at", "origin",
@@ -218,7 +227,7 @@ def serialize_enclosures(hass: HomeAssistant) -> list[dict[str, Any]]:
     _, runtime = _runtime(hass)
     if runtime is None:
         return []
-    coordinator = runtime.coordinator
+    coordinator, controller = runtime.coordinator, runtime.controller
     data = coordinator.data or {}
     tasks_by_enc: dict[int, list[dict[str, Any]]] = {}
     for task in coordinator.enclosure_tasks:
@@ -229,7 +238,14 @@ def serialize_enclosures(hass: HomeAssistant) -> list[dict[str, Any]]:
     for enc_id, enc in sorted(coordinator.enclosures.items(), key=lambda kv: kv[1]["code"].lower()):
         residents = coordinator.residents(enc_id, monitored_only=False)
         active = [a for a in residents if a in data and data[a].monitored]
-        snap = data.get(active[0]) if active else None
+        readings = coordinator.enclosure_readings(enc_id)
+        plants = []
+        for entity_id in (enc.get("config") or {}).get(CONF_PLANTS) or []:
+            info = plant_info(hass, entity_id)
+            info["last"] = coordinator.plant_last.get(entity_id, {})
+            plants.append(info)
+        plant_cabinet = coordinator.plant_cabinet(enc_id)
+        member_prefix = f"plant:{enc_id}:"
         result.append(
             {
                 **{k: v for k, v in enc.items() if k != "config"},
@@ -243,13 +259,20 @@ def serialize_enclosures(hass: HomeAssistant) -> list[dict[str, Any]]:
                 ],
                 "readings": (
                     {
-                        "temperature": snap.readings.temperature,
-                        "humidity": snap.readings.humidity,
-                        "water_temperature": snap.readings.water_temperature,
+                        "temperature": readings.temperature,
+                        "humidity": readings.humidity,
+                        "water_temperature": readings.water_temperature,
                     }
-                    if snap and snap.config.get("climate_from_enclosure") == enc_id
+                    if readings
                     else None
                 ),
+                "plants": plants,
+                # Planten sturen het klimaat (alleen zonder dieren in de kast).
+                "plant_cabinet": plant_cabinet,
+                "actuators": [
+                    r.as_dict() for r in controller.results.values()
+                    if plant_cabinet and any(str(m).startswith(member_prefix) for m in r.members)
+                ],
                 "link": deep_link(enc["code"]),
             }
         )
@@ -976,6 +999,14 @@ async def ws_enclosure_save(hass: HomeAssistant, connection, msg) -> None:
         old = runtime.coordinator.enclosures.get(item.get("id") or -1, {}).get("config") or {}
         cfg = _clean_animal_data(item["config"])
         cfg = {k: v for k, v in cfg.items() if k in (*SENSOR_KEYS, *ACTUATOR_KEYS, *TUNING_KEYS)}
+        raw = item["config"]
+        plants = [e for e in cv.ensure_list(raw.get(CONF_PLANTS) or []) if str(e).startswith("plant.")]
+        if plants:
+            cfg[CONF_PLANTS] = plants
+        if raw.get(CONF_LIGHT_HOURS) not in (None, ""):
+            cfg[CONF_LIGHT_HOURS] = max(0.0, min(24.0, float(raw[CONF_LIGHT_HOURS])))
+        if raw.get(CONF_PLANT_CLIMATE) is False:
+            cfg[CONF_PLANT_CLIMATE] = False
         if old.get("snooze"):
             cfg["snooze"] = old["snooze"]
         item["config"] = cfg
@@ -1060,6 +1091,76 @@ async def ws_enclosure_log(hass: HomeAssistant, connection, msg) -> None:
     connection.send_result(msg["id"], {"entry_ids": entry_ids, "animals": ids})
 
 
+# --- planten (fase 8) ----------------------------------------------------------
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "arthropoda/plant/log",
+        vol.Required("plants"): [vol.All(str, vol.Match(r"^plant\."))],
+        vol.Required("entry_type"): vol.In(PLANT_ENTRY_TYPES),
+        vol.Optional("enclosure_id"): vol.Any(int, None),
+        vol.Optional("notes"): vol.Any(str, None),
+        vol.Optional("data", default={}): dict,
+    }
+)
+@websocket_api.async_response
+async def ws_plant_log(hass: HomeAssistant, connection, msg) -> None:
+    """Handeling voor planten (water, bemesten, snoeien, ...) noteren."""
+    _, runtime = _require(hass, connection, msg)
+    if runtime is None:
+        return
+    ts = dt_util.utcnow()
+    try:
+        ids = await hass.async_add_executor_job(
+            runtime.db.add_plant_entries, msg["plants"], msg["entry_type"], ts,
+            msg.get("notes") or None, msg.get("enclosure_id"), msg["data"],
+        )
+    except ValueError as err:
+        _error(connection, msg, "invalid", str(err))
+        return
+    for plant, entry_id in zip(msg["plants"], ids, strict=True):
+        hass.bus.async_fire(
+            EVENT_PLANT_ENTRY,
+            {"entry_id": entry_id, "plant": plant, "type": msg["entry_type"],
+             "timestamp": ts.isoformat(), "notes": msg.get("notes"),
+             "enclosure_id": msg.get("enclosure_id")},
+        )
+    await runtime.coordinator.async_refresh()
+    connection.send_result(msg["id"], {"entry_ids": ids})
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "arthropoda/plant/journal",
+        vol.Optional("plants"): [str],
+        vol.Optional("limit", default=50): vol.All(int, vol.Range(min=1, max=500)),
+    }
+)
+@websocket_api.async_response
+async def ws_plant_journal(hass: HomeAssistant, connection, msg) -> None:
+    _, runtime = _require(hass, connection, msg)
+    if runtime is None:
+        return
+    entries = await hass.async_add_executor_job(
+        runtime.db.list_plant_entries, msg.get("plants"), msg["limit"]
+    )
+    connection.send_result(msg["id"], {"entries": entries})
+
+
+@websocket_api.websocket_command(
+    {vol.Required("type"): "arthropoda/plant/entry/delete", vol.Required("entry_id"): int}
+)
+@websocket_api.async_response
+async def ws_plant_entry_delete(hass: HomeAssistant, connection, msg) -> None:
+    _, runtime = _require(hass, connection, msg)
+    if runtime is None:
+        return
+    await hass.async_add_executor_job(runtime.db.delete_plant_entry, msg["entry_id"])
+    await runtime.coordinator.async_refresh()
+    connection.send_result(msg["id"])
+
+
 @websocket_api.websocket_command(
     {vol.Required("type"): "arthropoda/task/done", vol.Required("uid"): str}
 )
@@ -1102,6 +1203,9 @@ def async_register_websocket(hass: HomeAssistant) -> None:
         ws_enclosure_delete,
         ws_enclosure_assign,
         ws_enclosure_log,
+        ws_plant_log,
+        ws_plant_journal,
+        ws_plant_entry_delete,
         ws_task_done,
         ws_nfc_listen,
         ws_breeding_list,

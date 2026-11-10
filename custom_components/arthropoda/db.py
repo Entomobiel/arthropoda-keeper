@@ -18,7 +18,7 @@ from .caresheet import ParsedCaresheet, build_document, profile_parts, split_spe
 from .journal import COUNTER_TYPES, ENTRY_TYPES, compute_effects
 from .models import Animal, AnimalBundle, CareProfile, Measurement, Species
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 _SCHEMA_V1 = """
 CREATE TABLE species (
@@ -190,9 +190,24 @@ CREATE TABLE enclosure (
 ALTER TABLE animal ADD COLUMN enclosure_id INTEGER
 """
 
-_MIGRATIONS: dict[int, str] = {1: _SCHEMA_V1, 2: _SCHEMA_V2, 3: _SCHEMA_V3}
+# Versie 4 (fase 8): dagboek voor planten (Plant Monitor, plant.*). Alleen toevoegingen.
+_SCHEMA_V4 = """
+CREATE TABLE plant_entry (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    plant        TEXT NOT NULL,
+    ts           TEXT NOT NULL,
+    type         TEXT NOT NULL,
+    notes        TEXT,
+    enclosure_id INTEGER,
+    data         TEXT NOT NULL DEFAULT '{}',
+    created_at   TEXT NOT NULL
+);
+CREATE INDEX idx_plant_entry_plant ON plant_entry(plant, ts)
+"""
 
-ENCLOSURE_TYPES = ("terrarium", "faunabox", "breeding_box", "formicarium", "aquarium", "net_cage", "other")
+_MIGRATIONS: dict[int, str] = {1: _SCHEMA_V1, 2: _SCHEMA_V2, 3: _SCHEMA_V3, 4: _SCHEMA_V4}
+
+ENCLOSURE_TYPES = ("terrarium", "faunabox", "breeding_box", "formicarium", "aquarium", "net_cage", "plant_cabinet", "other")
 ENCLOSURE_STATUSES = ("in_use", "empty", "maintenance")
 ENCLOSURE_FIELDS = (
     "code", "name", "type", "length_cm", "width_cm", "height_cm", "material", "ventilation",
@@ -908,6 +923,71 @@ class Database:
                 (json.dumps(enc["equipment"], ensure_ascii=False), _now(), enclosure_id),
             )
         return True
+
+    # --- plantendagboek -----------------------------------------------------
+
+    def add_plant_entries(
+        self,
+        plants: list[str],
+        entry_type: str,
+        ts: datetime,
+        notes: str | None = None,
+        enclosure_id: int | None = None,
+        data: dict[str, Any] | None = None,
+    ) -> list[int]:
+        """Handeling voor één of meer planten noteren."""
+        if not plants:
+            raise ValueError("Geen planten gekozen")
+        stamp, now = _iso(ts), _now()
+        ids = []
+        with self._tx() as conn:
+            for plant in plants:
+                cur = conn.execute(
+                    "INSERT INTO plant_entry (plant, ts, type, notes, enclosure_id, data, created_at)"
+                    " VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (plant, stamp, entry_type, notes, enclosure_id,
+                     json.dumps(data or {}, ensure_ascii=False), now),
+                )
+                ids.append(cur.lastrowid)
+        return ids
+
+    def list_plant_entries(self, plants: list[str] | None = None, limit: int = 50) -> list[dict[str, Any]]:
+        query = "SELECT * FROM plant_entry"
+        args: list[Any] = []
+        if plants is not None:
+            if not plants:
+                return []
+            query += f" WHERE plant IN ({', '.join('?' for _ in plants)})"
+            args += plants
+        query += " ORDER BY ts DESC, id DESC LIMIT ?"
+        args.append(limit)
+        with self._lock:
+            rows = self.conn.execute(query, args).fetchall()
+        return [
+            {**{k: row[k] for k in ("id", "plant", "ts", "type", "notes", "enclosure_id")},
+             "data": json.loads(row["data"] or "{}")}
+            for row in rows
+        ]
+
+    def last_plant_entries(self, plants: list[str]) -> dict[str, dict[str, str]]:
+        """{plant: {type: laatste tijdstip}}."""
+        if not plants:
+            return {}
+        with self._lock:
+            rows = self.conn.execute(
+                f"SELECT plant, type, MAX(ts) AS ts FROM plant_entry WHERE plant IN "
+                f"({', '.join('?' for _ in plants)}) GROUP BY plant, type",
+                plants,
+            ).fetchall()
+        result: dict[str, dict[str, str]] = {}
+        for row in rows:
+            result.setdefault(row["plant"], {})[row["type"]] = row["ts"]
+        return result
+
+    def delete_plant_entry(self, entry_id: int) -> bool:
+        with self._lock:
+            cur = self.conn.execute("DELETE FROM plant_entry WHERE id = ?", (entry_id,))
+        return cur.rowcount > 0
 
     # --- kweek ------------------------------------------------------------
 

@@ -40,6 +40,15 @@ from .const import MULTI_ACTUATOR_KEYS, SENSOR_KEYS, TUNING_KEYS
 from .db import Database
 from .journal import can_molt
 from .models import AnimalBundle
+from .plants import (
+    CONF_LIGHT_HOURS,
+    CONF_PLANTS,
+    PlantSnapshot,
+    _PlantRef,
+    plant_thresholds,
+    plant_values,
+    plants_steer,
+)
 from .profile import Readings, enclosure_too_small, evaluate, resolve_profile, target_temperature
 from .tasks import Task, compute_tasks, estimate_next_molt
 
@@ -129,6 +138,9 @@ class ArthropodaCoordinator(DataUpdateCoordinator[dict[str, AnimalSnapshot]]):
         self.enclosures: dict[int, dict[str, Any]] = {}
         self.enclosure_tasks: list[Task] = []
         self.effective_configs: dict[str, dict[str, Any]] = {}
+        # Planten in plantenkasten (zonder dieren) als leden van klimaatgroepen.
+        self.plant_snapshots: dict[str, PlantSnapshot] = {}
+        self.plant_last: dict[str, dict[str, str]] = {}
         self._unsub_state: Callable[[], None] | None = None
 
     # --- configuratie -----------------------------------------------------
@@ -144,7 +156,9 @@ class ArthropodaCoordinator(DataUpdateCoordinator[dict[str, AnimalSnapshot]]):
 
     def _source_entities(self) -> set[str]:
         ids: set[str] = set()
-        for cfg in (self.effective_configs or self.animal_configs).values():
+        configs = list((self.effective_configs or self.animal_configs).values())
+        configs += [snap.config for snap in self.plant_snapshots.values()]
+        for cfg in configs:
             ids.update(cfg.get(CONF_TEMPERATURE_SENSORS) or [])
             for key in (CONF_HUMIDITY_SENSOR, CONF_WATER_TEMPERATURE_SENSOR):
                 if cfg.get(key):
@@ -182,17 +196,20 @@ class ArthropodaCoordinator(DataUpdateCoordinator[dict[str, AnimalSnapshot]]):
 
     async def _async_update_data(self) -> dict[str, AnimalSnapshot]:
         def _load():
+            enclosures = {e["id"]: e for e in self.db.list_enclosures()}
+            plants = sorted({p for e in enclosures.values() for p in (e["config"].get(CONF_PLANTS) or [])})
             return (
                 self.db.load_bundles(list(self.animal_configs)),
                 self.db.list_broods(status="incubating"),
                 self.db.list_stock(),
                 self.db.list_documents(),
-                {e["id"]: e for e in self.db.list_enclosures()},
+                enclosures,
+                self.db.last_plant_entries(plants),
             )
 
-        self._bundles, self.broods, self.stock, self.documents, self.enclosures = (
-            await self.hass.async_add_executor_job(_load)
-        )
+        (
+            self._bundles, self.broods, self.stock, self.documents, self.enclosures, self.plant_last,
+        ) = await self.hass.async_add_executor_job(_load)
         result = self._compute()
         if self._unsub_state is not None or self._source_entities():
             self._retrack_if_needed()
@@ -207,6 +224,47 @@ class ArthropodaCoordinator(DataUpdateCoordinator[dict[str, AnimalSnapshot]]):
             if bundle.animal.enclosure_id == enclosure_id
             and (not monitored_only or bundle.animal.status in MONITORED_STATUSES)
         ]
+
+    def enclosure_readings(self, enclosure_id: int) -> Readings | None:
+        """Actuele sensorwaarden van een kast (None zonder sensoren)."""
+        cfg = (self.enclosures.get(enclosure_id) or {}).get("config") or {}
+        if not any(cfg.get(k) for k in SENSOR_KEYS if k != "food_plants"):
+            return None
+        return self._readings(cfg)
+
+    def plant_cabinet(self, enclosure_id: int) -> bool:
+        """Stuurt deze kast op haar planten (planten en geen dieren)?"""
+        enc = self.enclosures.get(enclosure_id)
+        return bool(enc) and plants_steer(enc, bool(self.residents(enclosure_id)))
+
+    def _plant_snapshots(self, now: datetime) -> dict[str, PlantSnapshot]:
+        """Eén lid per plant voor elke kast die op haar planten stuurt."""
+        result: dict[str, PlantSnapshot] = {}
+        climate_keys = (*[k for k in SENSOR_KEYS if k != "food_plants"], *ACTUATOR_KEYS)
+        for enc_id, enc in self.enclosures.items():
+            cfg = enc.get("config") or {}
+            if enc.get("status") == "maintenance" or not self.plant_cabinet(enc_id):
+                continue
+            if not any(cfg.get(k) for k in climate_keys):
+                continue
+            readings = self._readings(cfg)
+            for entity_id in cfg.get(CONF_PLANTS) or []:
+                state = self.hass.states.get(entity_id)
+                values = plant_values(plant_thresholds(self.hass, entity_id), cfg.get(CONF_LIGHT_HOURS))
+                is_day, day_start, day_end = self._day_window(values, now)
+                name = (state.attributes.get("friendly_name") if state else None) or entity_id
+                result[f"plant:{enc_id}:{entity_id}"] = PlantSnapshot(
+                    animal=_PlantRef(f"plant:{enc_id}:{entity_id}", name),
+                    enclosure_id=enc_id,
+                    config={**cfg, "climate_from_enclosure": enc_id},
+                    values=values,
+                    readings=readings,
+                    is_day=is_day,
+                    day_start=day_start,
+                    day_end=day_end,
+                    monitored=state is not None,
+                )
+        return result
 
     def _effective_config(self, animal_id: str, cfg: dict[str, Any]) -> dict[str, Any]:
         """Configuratie van een dier, met klimaat van de kast als die er een heeft.
@@ -294,7 +352,7 @@ class ArthropodaCoordinator(DataUpdateCoordinator[dict[str, AnimalSnapshot]]):
     @callback
     def async_recompute(self) -> None:
         """Herbereken zonder de database te lezen (bv. na een sensorwijziging)."""
-        if self._bundles:
+        if self._bundles or self.enclosures:
             self.async_set_updated_data(self._compute())
 
     def _read(self, entity_id: str | None, readings: Readings, temperature: bool) -> float | None:
@@ -456,6 +514,7 @@ class ArthropodaCoordinator(DataUpdateCoordinator[dict[str, AnimalSnapshot]]):
                     snapshot.next_molt = estimate_next_molt(bundle.molt_times)
             result[animal_id] = snapshot
         self.enclosure_tasks = self._enclosure_tasks(result, now)
+        self.plant_snapshots = self._plant_snapshots(now)
         return result
 
     # --- schrijven --------------------------------------------------------
