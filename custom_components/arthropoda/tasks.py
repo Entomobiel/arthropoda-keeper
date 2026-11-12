@@ -36,6 +36,8 @@ TEXTS = {
         "water_change": "Waterwissel",
         "diapause_end": "Uit diapauze halen",
         "equipment": "Onderhoud uitrusting",
+        "plant_water": "Sproeien",
+        "plant_fertilize": "Bemesten",
         "diapause_window": "Diapauze kan eindigen: {name}",
         "overdue": "{days} dag(en) te laat",
         "due_today": "Vandaag",
@@ -58,6 +60,8 @@ TEXTS = {
         "water_change": "Water change",
         "diapause_end": "End diapause",
         "equipment": "Equipment maintenance",
+        "plant_water": "Water",
+        "plant_fertilize": "Fertilize",
         "diapause_window": "Diapause may end: {name}",
         "overdue": "{days} day(s) overdue",
         "due_today": "Today",
@@ -90,12 +94,15 @@ class Task:
     interval_days: float
     enclosure_id: int | None = None
     index: int | None = None  # welk toestel (bij kind == "equipment")
-    label: str | None = None  # naam van het toestel
+    label: str | None = None  # naam van het toestel of de plant
+    plant: str | None = None  # plant.* (bij plant_water / plant_fertilize)
 
     @property
     def uid(self) -> str:
         if self.enclosure_id is not None:
             suffix = f":{self.index}" if self.index is not None else ""
+            if self.plant is not None:
+                suffix = f":{self.plant}"
             return f"enc{self.enclosure_id}:{self.kind}{suffix}"
         return f"{self.animal_id}:{self.kind}"
 

@@ -14,7 +14,7 @@
 import {
   BASE_CSS, commonName, daysText, dueText, esc, feederFilter, fmtNum, getStore, isFeeder, navigate, nextTask,
   openAnimalDialog, openJournalDialog, photoUrl, quickLog, rangeBar, stageText, t, toast,
-} from "./arthropoda-common.js?v=0.9.1";
+} from "./arthropoda-common.js?v=0.10.0";
 
 const CARD_CSS = `
   ${BASE_CSS}

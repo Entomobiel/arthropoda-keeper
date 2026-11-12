@@ -4,8 +4,8 @@
 import {
   NUMBER, dueText, entityField, esc, field, fmtDate, fmtNum, getStore, openDialog,
   openJournalDialog, photoUrl, readForm, selectHtml, toast, wireMulti,
-} from "./arthropoda-common.js?v=0.9.1";
-import { qrSvg } from "./arthropoda-qr.js?v=0.9.1";
+} from "./arthropoda-common.js?v=0.10.0";
+import { qrSvg } from "./arthropoda-qr.js?v=0.10.0";
 
 const ENC_TYPES = ["terrarium", "faunabox", "breeding_box", "formicarium", "aquarium", "net_cage", "plant_cabinet", "other"];
 const ENC_STATUSES = ["in_use", "empty", "maintenance"];
@@ -24,6 +24,8 @@ const TEXTS = {
     t_aquarium: "Aquarium", t_net_cage: "Gaaskooi", t_plant_cabinet: "Plantenkast", t_other: "Andere",
     plants_section: "Planten (Plant Monitor)", plants_field: "Planten in deze kast", light_hours: "Daglengte voor de planten (uren)",
     plant_climate: "Klimaat sturen op de grenswaarden van de planten",
+    care_title: "Verzorging per plant", care_water: "Sproeien elke … dagen", care_fertilize: "Bemesten elke … dagen",
+    care_note: "Leeg = geen taak. Een taak is afgehandeld zodra je die handeling voor de plant noteert op het werkscherm (of de taak afvinkt).",
     plants_note: "Zonder dieren in de kast stuurt de kast op de min/max-waarden die je in Plant Monitor bij elke plant instelt (overlap van alle planten). Zitten er dieren in, dan zijn de planten voedsel en telt alleen het klimaat van de dieren.",
     no_plants: "Geen planten gevonden. Installeer Plant Monitor (Marketplace) en maak eerst planten aan.",
     steers_plants: "Stuurt op planten", target: "Doel", plants_title: "Planten",
@@ -68,6 +70,8 @@ const TEXTS = {
     t_aquarium: "Aquarium", t_net_cage: "Mesh cage", t_plant_cabinet: "Plant cabinet", t_other: "Other",
     plants_section: "Plants (Plant Monitor)", plants_field: "Plants in this enclosure", light_hours: "Day length for the plants (hours)",
     plant_climate: "Control the climate on the plants' thresholds",
+    care_title: "Care per plant", care_water: "Water every … days", care_fertilize: "Fertilize every … days",
+    care_note: "Empty = no task. A task is done as soon as you log that action for the plant on the work screen (or tick off the task).",
     plants_note: "Without animals in the enclosure, it is controlled on the min/max values you set for each plant in Plant Monitor (overlap of all plants). With animals inside, the plants are food and only the animals' climate counts.",
     no_plants: "No plants found. Install Plant Monitor (Marketplace) and create plants first.",
     steers_plants: "Controlled by plants", target: "Target", plants_title: "Plants",
@@ -131,6 +135,20 @@ export function openEnclosureDialog(hass, enc = null) {
       ${field(te(hass, "interval_days"), `<input type="number" data-eq="interval_days" value="${esc(item.interval_days ?? "")}">`)}
       ${field(te(hass, "serviced_at"), `<input type="date" data-eq="serviced_at" value="${esc(item.serviced_at || "")}">`)}
       <button type="button" class="ak-btn" data-eq-remove>✕</button></div>`;
+  // Interval per plant (sproeien/bemesten); rijen volgen de gekozen planten.
+  const careRows = (plants, care) => plants.length ? `
+      <div style="font-weight:500;margin:8px 0 2px">${esc(te(hass, "care_title"))}</div>
+      <p style="margin:0 0 6px;font-size:.85em;color:var(--secondary-text-color)">${esc(te(hass, "care_note"))}</p>
+      ${plants.map((p) => `<div class="ak-grid ak-care" data-care-plant="${esc(p)}" style="align-items:end;margin-bottom:6px">
+        <div class="ak-field"><span>&nbsp;</span><b>${esc(hass.states[p]?.attributes.friendly_name || p)}</b></div>
+        ${field(te(hass, "care_water"), `<input type="number" min="0" step="0.5" data-care="plant_water" value="${esc(care[p]?.plant_water ?? "")}">`)}
+        ${field(te(hass, "care_fertilize"), `<input type="number" min="0" step="1" data-care="plant_fertilize" value="${esc(care[p]?.plant_fertilize ?? "")}">`)}
+      </div>`).join("")}` : "";
+  const readCare = (body) => Object.fromEntries([...body.querySelectorAll(".ak-care")].map((row) => [
+    row.dataset.carePlant,
+    Object.fromEntries([...row.querySelectorAll("[data-care]")].filter((i) => i.value !== "")
+      .map((i) => [i.dataset.care, Number(i.value)])),
+  ]));
 
   openDialog(hass, enc ? `${te(hass, "edit")}: ${enc.code}` : te(hass, "add_enclosure"), (body) => {
     body.innerHTML = `
@@ -164,7 +182,7 @@ export function openEnclosureDialog(hass, enc = null) {
           : `<div class="ak-field wide"><span>${esc(te(hass, "plants_field"))}</span><span>${esc(te(hass, "no_plants"))}</span></div>`}
         ${field(te(hass, "light_hours"), NUMBER("light_hours", cfg.light_hours, 0.5))}
         ${field(te(hass, "plant_climate"), `<input type="checkbox" name="plant_climate" ${cfg.plant_climate === false ? "" : "checked"}>`)}
-      </div></fieldset>
+      </div><div data-care-list>${careRows(cfg.plants || [], cfg.plant_care || {})}</div></fieldset>
       <fieldset><legend>${esc(te(hass, "climate"))}</legend>
         <p style="margin:0 0 8px;font-size:.85em;color:var(--secondary-text-color)">${esc(te(hass, "climate_note"))}</p>
         <div class="ak-grid">
@@ -190,6 +208,14 @@ export function openEnclosureDialog(hass, enc = null) {
       </fieldset>
       ${enc ? `<button type="button" class="ak-btn" data-enc-delete style="color:var(--error-color,#c62828)">${esc(te(hass, "delete"))}</button>` : ""}`;
     wireMulti(body);
+    const plantChips = body.querySelector('[data-multi="plants"] .chips');
+    if (plantChips) {
+      new MutationObserver(() => {
+        const care = { ...(cfg.plant_care || {}), ...readCare(body) };
+        const plants = [...plantChips.querySelectorAll(".chip")].map((c) => c.dataset.value);
+        body.querySelector("[data-care-list]").innerHTML = careRows(plants, care);
+      }).observe(plantChips, { childList: true });
+    }
     body.querySelector("[data-eq-add]").addEventListener("click", () =>
       body.querySelector("[data-eq-list]").insertAdjacentHTML("beforeend", equipmentRow()));
     body.addEventListener("click", (e) => {
@@ -208,7 +234,8 @@ export function openEnclosureDialog(hass, enc = null) {
       "lights", "fan", "water_heater", "pumps", "hysteresis", "mist_seconds", "mist_pause_minutes",
       "mist_max_per_day", "light_ramp_minutes", "mist_times"];
     const config = Object.fromEntries(climateKeys.map((k) => [k, data[k]]));
-    Object.assign(config, { plants: data.plants || [], light_hours: data.light_hours, plant_climate: data.plant_climate !== false });
+    Object.assign(config, { plants: data.plants || [], light_hours: data.light_hours, plant_climate: data.plant_climate !== false,
+      plant_care: readCare(body) });
     const equipment = [...body.querySelectorAll(".ak-eq")].map((row) => {
       const get = (k) => row.querySelector(`[data-eq="${k}"]`).value;
       return { name: get("name") || null, interval_days: get("interval_days") ? Number(get("interval_days")) : null,
@@ -527,7 +554,7 @@ export function renderWorkScreen(host, box, hass, code, { onEdit, onBack }) {
       ${plantsHtml(hass, enc, selectedPlants)}
       <div class="card"><h3>${esc(te(hass, "tasks_today"))}</h3>
         ${tasks.length ? tasks.map((tk) => `<div class="task"><button data-task="${esc(tk.uid)}" title="✓">✓</button>
-          <div class="grow"><b>${esc(tk.label || taskLabel(hass, tk.kind))}</b><div class="muted small">${esc(tk.target)} · ${esc(dueText(hass, tk.due))}</div></div></div>`).join("")
+          <div class="grow"><b>${esc(tk.plant ? `${taskLabel(hass, tk.kind)}: ${tk.label}` : (tk.label || taskLabel(hass, tk.kind)))}</b><div class="muted small">${esc(tk.target)} · ${esc(dueText(hass, tk.due))}</div></div></div>`).join("")
           : `<div class="muted">${esc(te(hass, "no_tasks_today"))}</div>`}
       </div>
       <div class="card" style="margin-top:12px"><h3>${esc(te(hass, "last_actions"))}</h3><div data-last class="small">…</div></div>
@@ -636,8 +663,10 @@ export function renderWorkScreen(host, box, hass, code, { onEdit, onBack }) {
 function taskLabel(hass, kind) {
   const lang = (hass.language || "en").slice(0, 2);
   const nl = { feeding: "Voederen", cleaning: "Schoonmaken", substrate_change: "Substraat vervangen",
-    water_change: "Waterwissel", diapause_end: "Uit diapauze halen", equipment: "Onderhoud uitrusting" };
+    water_change: "Waterwissel", diapause_end: "Uit diapauze halen", equipment: "Onderhoud uitrusting",
+    plant_water: "Sproeien", plant_fertilize: "Bemesten" };
   const en = { feeding: "Feed", cleaning: "Clean", substrate_change: "Change substrate",
-    water_change: "Water change", diapause_end: "End diapause", equipment: "Equipment maintenance" };
+    water_change: "Water change", diapause_end: "End diapause", equipment: "Equipment maintenance",
+    plant_water: "Water", plant_fertilize: "Fertilize" };
   return (lang === "nl" ? nl : en)[kind] || kind;
 }

@@ -47,6 +47,7 @@ from .const import (
     NAG_DEFAULTS,
 )
 from .journal import COUNTER_TYPES
+from .plants import PLANT_CARE_KINDS
 from .tasks import TASK_KINDS, Task, texts
 
 _LOGGER = logging.getLogger(__name__)
@@ -250,6 +251,12 @@ class NagManager:
                 and not self.scanned_recently(task.enclosure_id):
             code = self.coordinator.enclosures[task.enclosure_id]["code"]
             raise ScanRequired(nag_texts(self.hass.config.language)["scan_required"].format(code=code))
+
+    def check_plants_allowed(self, plants: list[str], entry_type: str) -> None:
+        """Sproeien/bemesten over tijd mag pas na een scan van die kast."""
+        for task in self.coordinator.enclosure_tasks:
+            if task.plant in plants and PLANT_CARE_KINDS.get(task.kind) == entry_type:
+                self.check_equipment_allowed(task)
 
     # --- taken ------------------------------------------------------------
 

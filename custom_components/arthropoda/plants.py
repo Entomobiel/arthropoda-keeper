@@ -36,6 +36,34 @@ PLANT_ENTRY_TYPES = (
     "watered", "fertilized", "pruned", "repotted", "harvested", "pest", "sown", "note",
 )
 
+EVENT_PLANT_ENTRY = "arthropoda_plant_entry"
+
+# Verzorging per plant: config["plant_care"] = {"plant.x": {"plant_water": 1, ...}}.
+# Taaksoort -> handeling in het plantenlogboek die de taak afhandelt.
+CONF_PLANT_CARE = "plant_care"
+PLANT_CARE_KINDS = {"plant_water": "watered", "plant_fertilize": "fertilized"}
+
+
+def clean_plant_care(raw: Any, plants: list[str]) -> dict[str, dict[str, float]]:
+    """Alleen geldige intervallen (dagen > 0) voor planten die in de kast staan."""
+    result: dict[str, dict[str, float]] = {}
+    if not isinstance(raw, dict):
+        return result
+    for plant, intervals in raw.items():
+        if plant not in plants or not isinstance(intervals, dict):
+            continue
+        clean = {}
+        for kind in PLANT_CARE_KINDS:
+            try:
+                days = float(intervals.get(kind) or 0)
+            except (TypeError, ValueError):
+                continue
+            if days > 0:
+                clean[kind] = min(days, 365.0)
+        if clean:
+            result[plant] = clean
+    return result
+
 
 def _number(hass: HomeAssistant, entity_id: str | None, temperature: bool = False) -> float | None:
     if not entity_id:

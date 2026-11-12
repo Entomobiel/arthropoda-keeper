@@ -107,3 +107,70 @@ async def test_plant_cabinet_climate_and_journal(hass: HomeAssistant, hass_ws_cl
     (enc,) = (await call(type="arthropoda/enclosures/list"))["result"]["enclosures"]
     assert enc["plant_cabinet"] is False and enc["config"]["plant_climate"] is False
     assert turn_off is not None
+
+
+async def test_plant_care_tasks(hass: HomeAssistant, hass_ws_client) -> None:
+    """Sproeien/bemesten per plant: taak, afhandelen via het logboek, scanbewijs."""
+    from datetime import timedelta
+
+    from homeassistant.util import dt as dt_util
+
+    gras = _fake_plant(hass, "gras", "Gras", (15, 25), (40, 80))
+    eik = _fake_plant(hass, "eik", "Eik", (15, 24), (40, 80))
+    entry, call, _add, _ = await _setup(hass, hass_ws_client)
+
+    res = await call(type="arthropoda/enclosure/save", item={
+        "code": "PK-02", "type": "plant_cabinet", "nfc_tag": "TAG-PK",
+        "config": {"plants": [gras, eik], "plant_care": {
+            gras: {"plant_water": 1, "plant_fertilize": 14},
+            eik: {"plant_water": "", "plant_fertilize": 0},     # leeg/0 → geen taak
+            "plant.weg": {"plant_water": 1},                    # niet in de kast → weg
+        }},
+    })
+    assert res["success"], res
+    enc_id = res["result"]["id"]
+    (enc,) = (await call(type="arthropoda/enclosures/list"))["result"]["enclosures"]
+    assert enc["config"]["plant_care"] == {gras: {"plant_water": 1, "plant_fertilize": 14}}
+    tasks = {t["kind"]: t for t in enc["tasks"]}
+    assert set(tasks) == {"plant_water", "plant_fertilize"}
+    water = tasks["plant_water"]
+    assert water["plant"] == gras and water["label"] == "Gras"
+    assert water["uid"] == f"enc{enc_id}:plant_water:{gras}"
+    # Nog nooit gedaan → vandaag te doen
+    assert dt_util.parse_datetime(water["due"]).date() == dt_util.now().date()
+
+    # Sproeien noteren op het werkscherm → volgende keer morgen
+    res = await call(type="arthropoda/plant/log", plants=[gras], entry_type="watered", enclosure_id=enc_id)
+    assert res["success"], res
+    (enc,) = (await call(type="arthropoda/enclosures/list"))["result"]["enclosures"]
+    water = next(t for t in enc["tasks"] if t["kind"] == "plant_water")
+    assert dt_util.parse_datetime(water["due"]).date() == dt_util.now().date() + timedelta(days=1)
+
+    # Afvinken in de takenlijst = 'bemest' in het plantenlogboek
+    fert = next(t for t in enc["tasks"] if t["kind"] == "plant_fertilize")
+    assert (await call(type="arthropoda/task/done", uid=fert["uid"]))["success"]
+    entries = (await call(type="arthropoda/plant/journal", plants=[gras]))["result"]["entries"]
+    assert [e["type"] for e in entries] == ["fertilized", "watered"]
+
+    # Over tijd + aandringen met scanbewijs: sproeien pas na een scan van de kast
+    runtime = entry.runtime_data
+    await hass.async_add_executor_job(
+        runtime.db.add_plant_entries, [gras], "watered", dt_util.utcnow() - timedelta(days=3), None, enc_id, {}
+    )
+    # (de recente sproeibeurt weghalen zodat de laatste 3 dagen oud is)
+    watered = [e for e in (await call(type="arthropoda/plant/journal", plants=[gras]))["result"]["entries"]
+               if e["type"] == "watered"]
+    assert (await call(type="arthropoda/plant/entry/delete", entry_id=watered[0]["id"]))["success"]
+    hass.config_entries.async_update_entry(
+        entry, options={**entry.options, "nag_enabled": True, "require_scan": True}
+    )
+    await hass.async_block_till_done()
+    await entry.runtime_data.coordinator.async_refresh()
+    res = await call(type="arthropoda/plant/log", plants=[gras], entry_type="watered", enclosure_id=enc_id)
+    assert not res["success"] and "PK-02" in res["error"]["message"]
+    # Andere handelingen (snoeien) mogen gewoon
+    assert (await call(type="arthropoda/plant/log", plants=[gras], entry_type="pruned"))["success"]
+    hass.bus.async_fire("tag_scanned", {"tag_id": "TAG-PK", "device_id": None})
+    await hass.async_block_till_done()
+    res = await call(type="arthropoda/plant/log", plants=[gras], entry_type="watered", enclosure_id=enc_id)
+    assert res["success"], res

@@ -54,13 +54,13 @@ from .db import SpeciesExistsError
 from .journal import ENTRY_TYPES
 from .plants import (
     CONF_LIGHT_HOURS,
+    CONF_PLANT_CARE,
     CONF_PLANT_CLIMATE,
     CONF_PLANTS,
     PLANT_ENTRY_TYPES,
+    clean_plant_care,
     plant_info,
 )
-
-EVENT_PLANT_ENTRY = "arthropoda_plant_entry"
 
 STATIC_UI_KEYS = (
     CONF_NAME, CONF_SPECIES_ID, "kind", "born_at", "acquired_at", "origin",
@@ -233,7 +233,8 @@ def serialize_enclosures(hass: HomeAssistant) -> list[dict[str, Any]]:
     tasks_by_enc: dict[int, list[dict[str, Any]]] = {}
     for task in coordinator.enclosure_tasks:
         tasks_by_enc.setdefault(task.enclosure_id, []).append(
-            {"uid": task.uid, "kind": task.kind, "due": _iso(task.due), "label": task.label}
+            {"uid": task.uid, "kind": task.kind, "due": _iso(task.due), "label": task.label,
+             "plant": task.plant}
         )
     result = []
     for enc_id, enc in sorted(coordinator.enclosures.items(), key=lambda kv: kv[1]["code"].lower()):
@@ -1013,6 +1014,9 @@ async def ws_enclosure_save(hass: HomeAssistant, connection, msg) -> None:
         plants = [e for e in cv.ensure_list(raw.get(CONF_PLANTS) or []) if str(e).startswith("plant.")]
         if plants:
             cfg[CONF_PLANTS] = plants
+            care = clean_plant_care(raw.get(CONF_PLANT_CARE), plants)
+            if care:
+                cfg[CONF_PLANT_CARE] = care
         if raw.get(CONF_LIGHT_HOURS) not in (None, ""):
             cfg[CONF_LIGHT_HOURS] = max(0.0, min(24.0, float(raw[CONF_LIGHT_HOURS])))
         if raw.get(CONF_PLANT_CLIMATE) is False:
@@ -1142,23 +1146,14 @@ async def ws_plant_log(hass: HomeAssistant, connection, msg) -> None:
     _, runtime = _require(hass, connection, msg)
     if runtime is None:
         return
-    ts = dt_util.utcnow()
     try:
-        ids = await hass.async_add_executor_job(
-            runtime.db.add_plant_entries, msg["plants"], msg["entry_type"], ts,
-            msg.get("notes") or None, msg.get("enclosure_id"), msg["data"],
+        ids = await runtime.coordinator.async_log_plants(
+            msg["plants"], msg["entry_type"], msg.get("notes") or None,
+            msg.get("enclosure_id"), msg["data"],
         )
-    except ValueError as err:
+    except ValueError as err:  # ook ScanRequired
         _error(connection, msg, "invalid", str(err))
         return
-    for plant, entry_id in zip(msg["plants"], ids, strict=True):
-        hass.bus.async_fire(
-            EVENT_PLANT_ENTRY,
-            {"entry_id": entry_id, "plant": plant, "type": msg["entry_type"],
-             "timestamp": ts.isoformat(), "notes": msg.get("notes"),
-             "enclosure_id": msg.get("enclosure_id")},
-        )
-    await runtime.coordinator.async_refresh()
     connection.send_result(msg["id"], {"entry_ids": ids})
 
 

@@ -2,7 +2,7 @@
 
 Home Assistant-integratie voor het houden van insecten, spinnen, schorpioenen, pissebedden en andere geleedpotigen, inclusief waterinsecten. Elk dier of elke kolonie wordt een eigen apparaat met klimaatbewaking, tellers en een dagboek, vergelijkbaar met de plant monitor.
 
-> **Status: versie 0.9** – kern, klimaat, opvolging, paneel/kaarten, AI-caresheets, foto's, kweek, voorraad, documenten, diapauze, kasten met NFC/QR, plantenkasten met Plant Monitor, aandringen met scanbewijs. Zie [docs/ONTWERP.md](docs/ONTWERP.md).
+> **Status: versie 0.10** – kern, klimaat, opvolging, paneel/kaarten, AI-caresheets, foto's, kweek, voorraad, documenten, diapauze, kasten met NFC/QR, plantenkasten met Plant Monitor en verzorgingstaken per plant, aandringen met scanbewijs. Zie [docs/ONTWERP.md](docs/ONTWERP.md).
 
 ## Aandringen bij taken over tijd (fase 9)
 
@@ -29,6 +29,12 @@ Planten uit [Plant Monitor](https://github.com/Olen/homeassistant-plant) (`plant
   - Uitvinkbaar per kast (*Klimaat sturen op de grenswaarden van de planten*).
 - **Zitten er dieren in**, dan zijn de planten voedsel: alleen het klimaat van de dieren telt. Zo kan een plant naar een kweekbak verhuizen om opgegeten te worden.
 - **Werkscherm:** de planten met hun toestand uit Plant Monitor (in orde of probleem, wanneer laatst water) en knoppen *Water gegeven, Bemest, Gesnoeid, Geoogst, Verpot, Plaag, Gezaaid, Notitie*. Tik een plant aan of uit om de handeling alleen voor bepaalde planten te noteren.
+- **Verzorging per plant (0.10):**
+  - Onder de planten stel je per plant **Sproeien elke … dagen** en **Bemesten elke … dagen** in, bijvoorbeeld 1 dag voor kiemend gras.
+  - Je krijgt dan een taak *Sproeien: Gras* in de takenlijst, de kalender en op het werkscherm.
+  - De taak is afgehandeld zodra je *Water gegeven* (of *Bemest*) voor die plant noteert, of als je hem afvinkt. Afvinken zet de handeling ook in het plantendagboek.
+  - Het aandringen en het scanbewijs gelden ook voor deze taken.
+  - Is er nog nooit gesproeid, dan staat de taak op vandaag.
 - **Plantendagboek:** handelingen staan in een eigen tabel (database v4, automatische migratie met reservekopie `arthropoda.db.bak-v3`). Bij elke handeling vuurt de gebeurtenis `arthropoda_plant_entry`.
 - Grenswaarden worden via het entiteitenregister gevonden, dus hernoemde entiteiten blijven werken.
 

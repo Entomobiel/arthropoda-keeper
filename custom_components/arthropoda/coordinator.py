@@ -42,7 +42,10 @@ from .journal import can_molt
 from .models import AnimalBundle
 from .plants import (
     CONF_LIGHT_HOURS,
+    CONF_PLANT_CARE,
     CONF_PLANTS,
+    EVENT_PLANT_ENTRY,
+    PLANT_CARE_KINDS,
     PlantSnapshot,
     _PlantRef,
     plant_thresholds,
@@ -322,6 +325,30 @@ class ArthropodaCoordinator(DataUpdateCoordinator[dict[str, AnimalSnapshot]]):
                     due = snooze[key]
                 tasks.append(Task("", "equipment", due, float(interval), enclosure_id=enc_id,
                                   index=index, label=item.get("name") or item.get("type")))
+            tasks.extend(self._plant_tasks(enc_id, enc, snooze))
+        return tasks
+
+    def _plant_tasks(self, enc_id: int, enc: dict[str, Any], snooze: dict[str, datetime]) -> list[Task]:
+        """Sproeien/bemesten per plant volgens het interval dat in de kast is ingesteld."""
+        cfg = enc.get("config") or {}
+        care = cfg.get(CONF_PLANT_CARE) or {}
+        tasks: list[Task] = []
+        for plant in cfg.get(CONF_PLANTS) or []:
+            last = self.plant_last.get(plant) or {}
+            state = self.hass.states.get(plant)
+            name = state.attributes.get("friendly_name") if state else None
+            for kind, entry_type in PLANT_CARE_KINDS.items():
+                interval = (care.get(plant) or {}).get(kind)
+                if not interval:
+                    continue
+                done = dt_util.parse_datetime(last.get(entry_type) or "")
+                # Nog nooit gedaan: vandaag te doen (niet meteen 'te laat').
+                due = (done + timedelta(days=float(interval))) if done else dt_util.start_of_local_day()
+                key = f"{kind}:{plant}"
+                if snooze.get(key) and snooze[key] > due:
+                    due = snooze[key]
+                tasks.append(Task("", kind, due, float(interval), enclosure_id=enc_id,
+                                  label=name or plant, plant=plant))
         return tasks
 
     # --- collectie-overzicht (kweek, voorraad, documenten) -----------------
@@ -576,6 +603,12 @@ class ArthropodaCoordinator(DataUpdateCoordinator[dict[str, AnimalSnapshot]]):
         if task.enclosure_id is None:
             await self.async_log([task.animal_id], task.journal_type, data={"source": "todo"})
             return
+        if task.plant is not None:
+            await self.async_log_plants(
+                [task.plant], PLANT_CARE_KINDS[task.kind],
+                enclosure_id=task.enclosure_id, data={"source": "todo"},
+            )
+            return
         if task.kind == "equipment":
             if self.nag is not None:
                 self.nag.check_equipment_allowed(task)
@@ -592,12 +625,39 @@ class ArthropodaCoordinator(DataUpdateCoordinator[dict[str, AnimalSnapshot]]):
                 data={"source": "todo", "enclosure_id": task.enclosure_id},
             )
 
+    async def async_log_plants(
+        self,
+        plants: list[str],
+        entry_type: str,
+        notes: str | None = None,
+        enclosure_id: int | None = None,
+        data: dict[str, Any] | None = None,
+    ) -> list[int]:
+        """Handeling voor planten noteren (handelt ook hun sproei-/bemesttaken af)."""
+        if self.nag is not None:
+            self.nag.check_plants_allowed(plants, entry_type)
+        ts = dt_util.utcnow()
+        ids = await self.hass.async_add_executor_job(
+            self.db.add_plant_entries, plants, entry_type, ts, notes, enclosure_id, data or {}
+        )
+        for plant, entry_id in zip(plants, ids, strict=True):
+            self.hass.bus.async_fire(
+                EVENT_PLANT_ENTRY,
+                {"entry_id": entry_id, "plant": plant, "type": entry_type,
+                 "timestamp": ts.isoformat(), "notes": notes, "enclosure_id": enclosure_id},
+            )
+        await self.async_refresh()
+        return ids
+
     async def async_snooze_task(self, task: Task, until: datetime) -> None:
         if task.enclosure_id is None:
             await self.async_snooze(task.animal_id, task.kind, until)
             return
         enc = self.enclosures[task.enclosure_id]
-        key = f"equipment:{task.index}" if task.kind == "equipment" else task.kind
+        if task.plant is not None:
+            key = f"{task.kind}:{task.plant}"
+        else:
+            key = f"equipment:{task.index}" if task.kind == "equipment" else task.kind
         config = dict(enc.get("config") or {})
         config["snooze"] = {**(config.get("snooze") or {}), key: until.isoformat()}
         await self.hass.async_add_executor_job(

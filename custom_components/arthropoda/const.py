@@ -17,7 +17,7 @@ SIGNAL_UPDATE = "arthropoda_update"
 # Frontend
 PANEL_URL_PATH = "arthropoda"
 STATIC_URL = "/arthropoda_static"
-FRONTEND_VERSION = "0.9.1"
+FRONTEND_VERSION = "0.10.0"
 
 # --- Soortkenmerken -------------------------------------------------------
 
