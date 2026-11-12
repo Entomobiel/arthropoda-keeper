@@ -8,12 +8,13 @@ import {
   BASE_CSS, commonName, daysText, dueText, esc, fmtDate, fmtDateTime, fmtNum, getStore,
   navigate, nextTask, openAnimalDialog, openJournalDialog, quickLog, rangeBar, stageText, t, toast,
   feederFilter, field, isFeeder, openDialog, photoCredit, photoUrl,
-} from "./arthropoda-common.js?v=0.12.0";
+  INSIGHT_ICON, insightChips, insightText, ti,
+} from "./arthropoda-common.js?v=0.13.0";
 import {
   WORK_CSS, dims, getRound, openEnclosureDialog, openLabelsDialog, openNfcDialog, openRoundSummary,
   openTasks, renderWorkScreen, startRound, te,
-} from "./arthropoda-enclosures.js?v=0.12.0";
-import { FOOD_CSS, renderFoodView } from "./arthropoda-food.js?v=0.12.0";
+} from "./arthropoda-enclosures.js?v=0.13.0";
+import { FOOD_CSS, renderFoodView } from "./arthropoda-food.js?v=0.13.0";
 
 const CSS = `
   ${BASE_CSS}
@@ -323,7 +324,8 @@ class ArthropodaPanel extends HTMLElement {
         <div class="name ellipsis">${esc(a.name)}</div>
         <div class="muted small ellipsis"><i>${esc(a.species?.scientific_name || "")}</i>${commonName(h, a.species) ? ` · ${esc(commonName(h, a.species))}` : ""}</div>
       </div>${this._statusChip(a)}</div>
-      ${isFeeder(a) || a.status === "diapause" ? `<div class="row wrap">
+      ${isFeeder(a) || a.status === "diapause" || insightChips(h, a) ? `<div class="row wrap">
+        ${insightChips(h, a)}
         ${isFeeder(a) ? `<span class="chip">🦗 ${esc(t(h, "feeder"))}</span>` : ""}
         ${a.status === "diapause" ? `<span class="chip">❄ ${esc(t(h, "diapause"))}${a.diapause?.earliest_end ? ` · ${esc(t(h, "earliest_end").toLowerCase())} ${esc(fmtDate(h, a.diapause.earliest_end))}` : ""}</span>` : ""}
       </div>` : ""}
@@ -402,6 +404,13 @@ class ArthropodaPanel extends HTMLElement {
         <button class="ak" data-entry>✎ ${esc(t(h, "new_entry"))}</button>
         <button class="ak primary" data-edit>⚙ ${esc(t(h, "edit"))}</button>
       </div>
+      ${(a.insights || []).length ? `<div class="card insights" style="margin-bottom:14px"><h3>${esc(ti(h, "insights"))}</h3>
+        ${a.insights.map((i) => `<div class="row" style="padding:4px 0;align-items:flex-start">
+          <span>${INSIGHT_ICON[i.key] || "•"}</span>
+          <span class="grow ${i.level === "warn" ? "" : "muted"}">${esc(insightText(h, i))}</span>
+          ${i.key === "premolt_suspected" ? `<button class="ak primary" data-quick="premolt_observed">${esc(ti(h, "confirm_premolt"))}</button>` : ""}
+          ${i.key === "pairing_window" ? `<button class="ak" data-entry-type="pairing">${esc(ti(h, "log_pairing"))}</button>` : ""}
+        </div>`).join("")}</div>` : ""}
       <div class="detail">
         <div class="card photo-box">
           ${photoUrl(h, a) ? `<img src="${esc(photoUrl(h, a))}" alt="${esc(a.name)}">` : `<div class="ph">🕷</div>`}
@@ -465,6 +474,7 @@ class ArthropodaPanel extends HTMLElement {
     if (btn.hasAttribute("data-back")) return navigate("/arthropoda?view=collection");
     if (btn.dataset.quick) return quickLog(this, this._hass, id, btn.dataset.quick);
     if (btn.hasAttribute("data-entry")) return openJournalDialog(this._hass, [id]);
+    if (btn.dataset.entryType) return openJournalDialog(this._hass, [id], btn.dataset.entryType);
     if (btn.hasAttribute("data-edit")) return openAnimalDialog(this._hass, this._store.animal(id)).catch((err) => this._err(err));
     if (btn.dataset.del) return this._deleteEntry(Number(btn.dataset.del));
     if (btn.hasAttribute("data-upload")) {

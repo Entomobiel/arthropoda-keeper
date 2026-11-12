@@ -264,6 +264,76 @@ class Store extends EventTarget {
 }
 
 const stores = new WeakMap();
+// --- inzichten (insights.py) ---------------------------------------------
+const INSIGHT_TEXTS = {
+  nl: {
+    premolt_suspected: "Waarschijnlijk premolt: {n}× na elkaar voer geweigerd. Voederen gepauzeerd – zorg voor vers water en een vochtige hoek, en stoor niet.",
+    refusing_food: "{n}× na elkaar voer geweigerd. Controleer klimaat, prooigrootte en gezondheid.",
+    premolt_long: "Al {days} dagen in premolt. Controleer vochtigheid en waterbak.",
+    molt_overdue: "Vervelling verwacht rond {date} ({days} d geleden).",
+    lifespan: "Leeftijd {age} · verwacht levenseinde {min} – {max}",
+    senior: "Senior ({age}): voorbij de minimale levensverwachting ({min} – {max}).",
+    beyond_lifespan: "Ouder ({age}) dan de verwachte levensduur (tot {max}).",
+    pairing_window: "Volwassen mannetje: nog ±{months} maanden. Plan tijdig een koppeling.",
+    colony_declining: "Kolonie daalt: {from} → {to} ({pct} in {days} d). Controleer klimaat, voer en vocht.",
+    colony_trend: "Kolonie: {from} → {to} ({pct} in {days} d).",
+    confirm_premolt: "Premolt bevestigen", log_pairing: "Koppeling noteren", estimated: "geschat",
+    years: "j", months: "mnd", insights: "Aandachtspunten",
+  },
+  en: {
+    premolt_suspected: "Probably premolt: refused food {n}× in a row. Feeding paused – provide fresh water and a moist corner, and don't disturb.",
+    refusing_food: "Refused food {n}× in a row. Check climate, prey size and health.",
+    premolt_long: "In premolt for {days} days. Check humidity and water dish.",
+    molt_overdue: "Molt expected around {date} ({days} d ago).",
+    lifespan: "Age {age} · expected end of life {min} – {max}",
+    senior: "Senior ({age}): past the minimum life expectancy ({min} – {max}).",
+    beyond_lifespan: "Older ({age}) than the expected lifespan (up to {max}).",
+    pairing_window: "Adult male: about {months} months left. Plan a pairing in time.",
+    colony_declining: "Colony declining: {from} → {to} ({pct} in {days} d). Check climate, food and moisture.",
+    colony_trend: "Colony: {from} → {to} ({pct} in {days} d).",
+    confirm_premolt: "Confirm premolt", log_pairing: "Log pairing", estimated: "estimated",
+    years: "y", months: "mo", insights: "Points of attention",
+  },
+};
+export const INSIGHT_ICON = {
+  premolt_suspected: "🕸", refusing_food: "🍽", premolt_long: "⏳", molt_overdue: "🔄", lifespan: "🎂",
+  senior: "🎂", beyond_lifespan: "🎂", pairing_window: "💕", colony_declining: "📉", colony_trend: "📈",
+};
+
+export function ti(hass, key) {
+  const lang = (hass.language || "en").slice(0, 2);
+  return (INSIGHT_TEXTS[lang] || INSIGHT_TEXTS.en)[key] ?? INSIGHT_TEXTS.en[key] ?? key;
+}
+
+function ageText(hass, days, estimated) {
+  if (days === null || days === undefined) return "?";
+  const years = Math.floor(days / 365.25);
+  const months = Math.floor((days - years * 365.25) / 30.44);
+  const txt = years ? `${years} ${ti(hass, "years")}${months ? ` ${months} ${ti(hass, "months")}` : ""}` : `${months} ${ti(hass, "months")}`;
+  return estimated ? `≥ ${txt} (${ti(hass, "estimated")})` : txt;
+}
+
+/** Tekst van één inzicht. */
+export function insightText(hass, i) {
+  const vars = {
+    n: i.refusals, days: i.days, date: i.expected ? fmtDate(hass, i.expected) : "",
+    age: ageText(hass, i.age_days, i.age_estimated),
+    min: i.end_min ? fmtDate(hass, i.end_min) : "", max: i.end_max ? fmtDate(hass, i.end_max) : "",
+    months: i.remaining_max_days !== undefined ? Math.max(0, Math.round(i.remaining_max_days / 30.44)) : "",
+    from: i.from !== undefined ? fmtNum(i.from, 0) : "", to: i.to !== undefined ? fmtNum(i.to, 0) : "",
+    pct: i.change !== undefined ? `${i.change > 0 ? "+" : ""}${Math.round(i.change * 100)} %` : "",
+  };
+  let text = ti(hass, i.key);
+  for (const [k, v] of Object.entries(vars)) text = text.replaceAll(`{${k}}`, v ?? "");
+  return text;
+}
+
+/** Korte chips voor de waarschuwingen (tegel, werkscherm). */
+export function insightChips(hass, animal) {
+  return (animal.insights || []).filter((i) => i.level === "warn")
+    .map((i) => `<span class="chip problem" title="${esc(insightText(hass, i))}">${INSIGHT_ICON[i.key] || "⚠"} ${esc(insightText(hass, i).split(/[.:]/)[0])}</span>`).join("");
+}
+
 export function getStore(hass) {
   let store = stores.get(hass.connection);
   if (!store) {

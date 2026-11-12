@@ -701,6 +701,29 @@ class Database:
                         (animal_id,),
                     )
                 ]
+                feeding_history = [
+                    (r["type"], _parse(r["ts"]))
+                    for r in self.conn.execute(
+                        "SELECT type, ts FROM journal_entry WHERE animal_id = ?"
+                        " AND type IN ('feeding', 'feeding_refused') ORDER BY ts DESC, id DESC LIMIT 8",
+                        (animal_id,),
+                    )
+                ]
+                adult_row = self.conn.execute(
+                    "SELECT MAX(ts) AS ts FROM journal_entry WHERE animal_id = ? AND ("
+                    " type = 'eclosion'"
+                    " OR (type = 'molt' AND json_extract(data, '$.stage_after') = 'adult')"
+                    " OR (type = 'stage_change' AND json_extract(data, '$.stage') = 'adult'))",
+                    (animal_id,),
+                ).fetchone()
+                count_history = [
+                    (_parse(r["ts"]), r["value"])
+                    for r in self.conn.execute(
+                        "SELECT ts, value FROM (SELECT ts, value FROM measurement"
+                        " WHERE animal_id = ? AND kind = 'count' ORDER BY ts DESC LIMIT 12) ORDER BY ts",
+                        (animal_id,),
+                    )
+                ]
                 measurements = {
                     r["kind"]: Measurement(r["value"], r["unit"], _parse(r["ts"]))
                     for r in self.conn.execute(
@@ -725,6 +748,10 @@ class Database:
                 measurements=measurements,
                 molt_times=molt_times,
                 brood_entries=brood_entries,
+                feeding_history=feeding_history,
+                premolt_since=last.get("premolt_observed"),
+                adult_since=_parse(adult_row["ts"]) if adult_row and adult_row["ts"] else None,
+                count_history=count_history,
             )
         return bundles
 

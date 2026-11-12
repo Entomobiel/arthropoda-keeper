@@ -2,7 +2,7 @@
 
 Home Assistant-integratie voor het houden van insecten, spinnen, schorpioenen, pissebedden en andere geleedpotigen, inclusief waterinsecten. Elk dier of elke kolonie wordt een eigen apparaat met klimaatbewaking, tellers en een dagboek, vergelijkbaar met de plant monitor.
 
-> **Status: versie 0.12** – kern, klimaat, opvolging, paneel/kaarten, AI-caresheets, foto's, kweek, voorraad, documenten, diapauze, kasten met NFC/QR, plantenkasten met Plant Monitor en verzorgingstaken per plant, voedselplanning met bakjes en groeifasen, sproeien op bodemvocht met pompjes, groeilampen op DLI, aandringen met scanbewijs. Zie [docs/ONTWERP.md](docs/ONTWERP.md).
+> **Status: versie 0.13** – kern, klimaat, opvolging, paneel/kaarten, AI-caresheets, foto's, kweek, voorraad, documenten, diapauze, kasten met NFC/QR, plantenkasten met Plant Monitor en verzorgingstaken per plant, voedselplanning met bakjes en groeifasen, sproeien op bodemvocht met pompjes, groeilampen op DLI, aandachtspunten per dier (premolt, vervelling, levensverwachting, kolonie), aandringen met scanbewijs. Zie [docs/ONTWERP.md](docs/ONTWERP.md).
 
 ## Aandringen bij taken over tijd (fase 9)
 
@@ -64,6 +64,34 @@ Tab **Voer**: elk bakje voedselplanten gevolgd van zaaien tot opeten. Stel per p
 - **Fototijdlijn**: met **📷** voeg je per bakje foto's toe, ook rechtstreeks met de camera van je gsm.
   - Elke foto krijgt de fase van dat moment mee.
   - De foto's staan in `/config/arthropoda/photos/pots/` en gaan dus mee in back-ups.
+
+## Aandachtspunten per dier (0.13)
+
+Arthropoda leidt uit het dagboek en de caresheet automatisch aandachtspunten af. Je ziet ze:
+
+- als rode chip op de tegel in de collectie;
+- bij het dier op het werkscherm;
+- in het blok **Aandachtspunten** op de dierpagina;
+- in de dagelijkse samenvatting (alleen de waarschuwingen).
+
+**Wat er gevolgd wordt:**
+
+- **Voer geweigerd → premolt-vermoeden**:
+  - Weigert een dier dat kan vervellen **2× na elkaar** voer (*Voer geweigerd* in het dagboek), dan staat er *Waarschijnlijk premolt*. Het voederen pauzeert dan vanzelf, en de voedertaak verdwijnt.
+  - Met de knop **Premolt bevestigen** noteer je de premolt.
+  - Na een aanvaarde voedering vervalt het vermoeden.
+  - Bij een dier dat niet (meer) vervelt, krijg je na **3 weigeringen** een waarschuwing.
+- **Vervelling**:
+  - *Al X dagen in premolt*: verschijnt na meer dan 90 dagen.
+  - *Vervelling verwacht rond …*: verschijnt als de geschatte vervelling ruim voorbij is, namelijk meer dan het halve laatste vervelinterval.
+- **Leeftijd en levensverwachting**: dit komt uit `lifespan` in de caresheet.
+  - Ondersteunde velden: `female_years`, `male_years`, `years`, `adult_months`, `female_adult_months` en `male_adult_months`.
+  - De leeftijd telt vanaf de geboortedatum, of anders vanaf de aankoop (dan als schatting).
+  - Bij `adult_months` telt de levensduur vanaf het moment dat het dier volwassen werd. Dat is de vervelling of uitkomst naar adult in het dagboek.
+  - Een **volwassen mannetje** met minder dan ±6 maanden te gaan krijgt *Plan tijdig een koppeling*, met de knop **Koppeling noteren**.
+- **Kolonie**: uit de tellingen (*Telling* in het dagboek) volgt het verloop.
+  - Bijvoorbeeld: *Kolonie: 500 → 300 (−40 % in 19 d)*.
+  - Daalt een kolonie met 30 % of meer binnen 45 dagen, dan krijg je **Kolonie daalt**.
 
 ## Bodemvocht, pompjes en licht (0.12)
 

@@ -7,7 +7,7 @@
  */
 import {
   esc, field, fmtDate, getStore, openDialog, readForm, selectHtml, toast, NUMBER,
-} from "./arthropoda-common.js?v=0.12.0";
+} from "./arthropoda-common.js?v=0.13.0";
 
 const TEXTS = {
   nl: {

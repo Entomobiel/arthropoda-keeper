@@ -87,3 +87,9 @@ class AnimalBundle:
     molt_times: list[datetime] = field(default_factory=list)
     # (type, tijdstip, data) van legsels en uitkomsten, chronologisch
     brood_entries: list[tuple[str, datetime, dict[str, Any]]] = field(default_factory=list)
+    # Laatste voederingen, nieuwste eerst: ("feeding" | "feeding_refused", tijdstip)
+    feeding_history: list[tuple[str, datetime]] = field(default_factory=list)
+    premolt_since: datetime | None = None
+    adult_since: datetime | None = None
+    # Tellingen van een kolonie, chronologisch: (tijdstip, aantal)
+    count_history: list[tuple[datetime, float]] = field(default_factory=list)

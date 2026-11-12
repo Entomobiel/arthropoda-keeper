@@ -38,6 +38,7 @@ from .const import (
 )
 from .const import MULTI_ACTUATOR_KEYS, SENSOR_KEYS, TUNING_KEYS
 from .db import Database
+from .insights import REFUSALS_MOLTING, compute_insights, lifespan, refusal_streak
 from .journal import can_molt
 from .models import AnimalBundle
 from . import food
@@ -86,6 +87,8 @@ class AnimalSnapshot:
     tasks: list[Task] = field(default_factory=list)
     next_molt: datetime | None = None
     diapause: dict[str, Any] | None = None
+    # Inzichten (insights.py): premolt-vermoeden, vervelling, levensverwachting, kolonie.
+    insights: list[dict[str, Any]] = field(default_factory=list)
 
     @property
     def animal(self):
@@ -779,7 +782,17 @@ class ArthropodaCoordinator(DataUpdateCoordinator[dict[str, AnimalSnapshot]]):
                 last.get("molt") is not None
                 and now - last["molt"] < timedelta(days=fast_days)
             )
-            feeding_paused = animal.premolt or animal.status == "diapause" or recently_molted
+            # Herhaaldelijk voer geweigerd door een dier dat kan vervellen: waarschijnlijk premolt.
+            molts = animal.kind == "individual" and can_molt(
+                animal.stage, bundle.species.development if bundle.species else None
+            )
+            premolt_suspected = (
+                molts and not animal.premolt
+                and refusal_streak(bundle.feeding_history) >= REFUSALS_MOLTING
+            )
+            feeding_paused = (
+                animal.premolt or premolt_suspected or animal.status == "diapause" or recently_molted
+            )
 
             interval = values.get("feeding_interval_days")
             next_feeding = None
@@ -825,6 +838,16 @@ class ArthropodaCoordinator(DataUpdateCoordinator[dict[str, AnimalSnapshot]]):
                         snapshot.problems.append("enclosure_too_small")
                 if snapshot.can_molt:
                     snapshot.next_molt = estimate_next_molt(bundle.molt_times)
+                life = lifespan(
+                    bundle.species.info if bundle.species else {}, animal.sex, animal.born_at,
+                    animal.acquired_at, animal.stage, bundle.adult_since, dt_util.now().date(),
+                )
+                snapshot.insights = compute_insights(
+                    can_molt=snapshot.can_molt, kind=animal.kind, premolt=animal.premolt,
+                    feeding_history=bundle.feeding_history, premolt_since=bundle.premolt_since,
+                    molt_times=bundle.molt_times, next_molt=snapshot.next_molt, life=life,
+                    sex=animal.sex, stage=animal.stage, counts=bundle.count_history, now=now,
+                )
             result[animal_id] = snapshot
         self.enclosure_tasks = self._enclosure_tasks(result, now)
         self.plant_snapshots = self._plant_snapshots(now)

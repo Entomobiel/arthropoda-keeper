@@ -166,6 +166,7 @@ def serialize_animals(hass: HomeAssistant) -> list[dict[str, Any]]:
                 "problems": snap.problems,
                 "is_day": snap.is_day,
                 "feeding_paused": snap.feeding_paused,
+                "insights": snap.insights,
                 "readings": {
                     "temperature": snap.readings.temperature,
                     "temperatures": snap.readings.temperatures,

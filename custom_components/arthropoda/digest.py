@@ -40,6 +40,10 @@ def build_digest(coordinator: ArthropodaCoordinator, language: str) -> str | Non
         when = t["overdue"].format(days=days) if days > 0 else t["due_today"]
         lines.append(f"• {t[task.kind]}: {coordinator.task_target_name(task)} ({when.lower()})")
     problems = [snap.animal.name for snap in data.values() if snap.problems]
+    attention = [snap.animal.name for snap in data.values()
+                 if any(i["level"] == "warn" for i in snap.insights)]
+    if attention:
+        lines.append(f"\n{t['digest_attention']}: {', '.join(attention)}")
     if problems:
         lines.append(f"\n{t['digest_problems']}: {', '.join(problems)}")
     low = coordinator.low_stock()

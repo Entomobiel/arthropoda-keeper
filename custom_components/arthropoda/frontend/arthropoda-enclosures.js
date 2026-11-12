@@ -3,10 +3,11 @@
  */
 import {
   NUMBER, dueText, entityField, esc, field, fmtDate, fmtNum, getStore, openDialog,
+  INSIGHT_ICON, insightText,
   openJournalDialog, photoUrl, readForm, selectHtml, toast, wireMulti,
-} from "./arthropoda-common.js?v=0.12.0";
-import { qrSvg } from "./arthropoda-qr.js?v=0.12.0";
-import { handlePotClick, potsCard } from "./arthropoda-food.js?v=0.12.0";
+} from "./arthropoda-common.js?v=0.13.0";
+import { qrSvg } from "./arthropoda-qr.js?v=0.13.0";
+import { handlePotClick, potsCard } from "./arthropoda-food.js?v=0.13.0";
 
 const ENC_TYPES = ["terrarium", "faunabox", "breeding_box", "formicarium", "aquarium", "net_cage", "plant_cabinet", "other"];
 const ENC_STATUSES = ["in_use", "empty", "maintenance"];
@@ -569,7 +570,8 @@ export function renderWorkScreen(host, box, hass, code, { onEdit, onBack }) {
       ${residents.length ? `<div class="residents">${residents.map((a) => {
         const p = photoUrl(hass, a);
         return `<button class="res ${selected.has(a.id) ? "on" : ""}" data-res="${esc(a.id)}">
-          ${p ? `<img src="${esc(p)}" alt="">` : `<span class="ph">🕷</span>`}<span>${esc(a.name)}</span></button>`;
+          ${p ? `<img src="${esc(p)}" alt="">` : `<span class="ph">🕷</span>`}<span>${esc(a.name)}${(a.insights || []).some((i) => i.level === "warn")
+            ? `<span class="small" style="display:block;color:var(--error-color,#c62828)">${(a.insights || []).filter((i) => i.level === "warn").map((i) => `${INSIGHT_ICON[i.key] || "⚠"} ${esc(insightText(hass, i).split(/[.:]/)[0])}`).join(" · ")}</span>` : ""}</span></button>`;
       }).join("")}</div>
       <div class="big">
         ${BIG_ACTIONS.map(([type, icon, key]) => `<button data-act="${type}" class="${doneLocally.has(type) ? "done" : ""}"><span>${icon}</span>${esc(te(hass, key))}</button>`).join("")}
