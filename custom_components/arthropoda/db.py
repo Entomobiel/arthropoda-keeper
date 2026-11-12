@@ -18,7 +18,7 @@ from .caresheet import ParsedCaresheet, build_document, profile_parts, split_spe
 from .journal import COUNTER_TYPES, ENTRY_TYPES, compute_effects
 from .models import Animal, AnimalBundle, CareProfile, Measurement, Species
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 _SCHEMA_V1 = """
 CREATE TABLE species (
@@ -205,7 +205,51 @@ CREATE TABLE plant_entry (
 CREATE INDEX idx_plant_entry_plant ON plant_entry(plant, ts)
 """
 
-_MIGRATIONS: dict[int, str] = {1: _SCHEMA_V1, 2: _SCHEMA_V2, 3: _SCHEMA_V3, 4: _SCHEMA_V4}
+_SCHEMA_V5 = """
+CREATE TABLE plant_profile (
+    plant            TEXT PRIMARY KEY,
+    kind             TEXT NOT NULL DEFAULT 'crop',
+    days_to_ready    REAL,
+    days_in_use      REAL,
+    days_to_recover  REAL,
+    sow_every_days   REAL,
+    days_to_germinate REAL,
+    updated_at       TEXT NOT NULL
+);
+CREATE TABLE plant_pot (
+    id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+    plant              TEXT NOT NULL,
+    kind               TEXT NOT NULL,
+    label              TEXT,
+    status             TEXT NOT NULL,
+    enclosure_id       INTEGER,
+    home_enclosure_id  INTEGER,
+    sown_at            TEXT,
+    status_since       TEXT NOT NULL,
+    ready_at           TEXT,
+    cycles             INTEGER NOT NULL DEFAULT 0,
+    notes              TEXT,
+    stages             TEXT NOT NULL DEFAULT '{}',
+    photos             TEXT NOT NULL DEFAULT '[]',
+    created_at         TEXT NOT NULL,
+    updated_at         TEXT NOT NULL
+);
+CREATE INDEX idx_plant_pot_status ON plant_pot(status, plant)
+"""
+
+_MIGRATIONS: dict[int, str] = {
+    1: _SCHEMA_V1, 2: _SCHEMA_V2, 3: _SCHEMA_V3, 4: _SCHEMA_V4, 5: _SCHEMA_V5,
+}
+
+# Bakjes met voedselplanten (zie food.py)
+POT_KINDS = ("crop", "perennial")
+POT_STATUSES = ("growing", "recovering", "in_use", "done", "failed")
+POT_FIELDS = (
+    "plant", "kind", "label", "status", "enclosure_id", "home_enclosure_id", "sown_at",
+    "status_since", "ready_at", "cycles", "notes", "stages", "photos",
+)
+POT_JSON = {"stages": dict, "photos": list}
+PROFILE_FIELDS = ("kind", "days_to_ready", "days_in_use", "days_to_recover", "sow_every_days", "days_to_germinate")
 
 ENCLOSURE_TYPES = ("terrarium", "faunabox", "breeding_box", "formicarium", "aquarium", "net_cage", "plant_cabinet", "other")
 ENCLOSURE_STATUSES = ("in_use", "empty", "maintenance")
@@ -988,6 +1032,94 @@ class Database:
         with self._lock:
             cur = self.conn.execute("DELETE FROM plant_entry WHERE id = ?", (entry_id,))
         return cur.rowcount > 0
+
+    # --- voedselplanten: profielen en bakjes --------------------------------
+
+    def list_plant_profiles(self) -> dict[str, dict[str, Any]]:
+        with self._lock:
+            rows = self.conn.execute("SELECT * FROM plant_profile").fetchall()
+        return {row["plant"]: {k: row[k] for k in PROFILE_FIELDS} for row in rows}
+
+    def save_plant_profile(self, plant: str, profile: dict[str, Any]) -> None:
+        if profile.get("kind") not in POT_KINDS:
+            raise ValueError(f"Onbekende soort plant: {profile.get('kind')}")
+        values = [profile.get(k) for k in PROFILE_FIELDS]
+        with self._tx() as conn:
+            conn.execute(
+                f"INSERT INTO plant_profile (plant, {', '.join(PROFILE_FIELDS)}, updated_at)"
+                f" VALUES (?, {', '.join('?' for _ in PROFILE_FIELDS)}, ?)"
+                f" ON CONFLICT(plant) DO UPDATE SET "
+                + ", ".join(f"{k} = excluded.{k}" for k in (*PROFILE_FIELDS, "updated_at")),
+                (plant, *values, _now()),
+            )
+
+    def delete_plant_profile(self, plant: str) -> bool:
+        with self._lock:
+            cur = self.conn.execute("DELETE FROM plant_profile WHERE plant = ?", (plant,))
+        return cur.rowcount > 0
+
+    def list_pots(self, active_only: bool = True) -> list[dict[str, Any]]:
+        query = "SELECT * FROM plant_pot"
+        if active_only:
+            query += " WHERE status NOT IN ('done', 'failed')"
+        query += " ORDER BY id"
+        with self._lock:
+            rows = self.conn.execute(query).fetchall()
+        return [self._row_to_pot(row) for row in rows]
+
+    def last_sown(self) -> dict[str, str]:
+        """{plant: laatste zaaidatum} over alle bakjes (ook opgegeten)."""
+        with self._lock:
+            rows = self.conn.execute(
+                "SELECT plant, MAX(sown_at) AS ts FROM plant_pot WHERE sown_at IS NOT NULL GROUP BY plant"
+            ).fetchall()
+        return {row["plant"]: row["ts"] for row in rows}
+
+    def get_pot(self, pot_id: int) -> dict[str, Any] | None:
+        with self._lock:
+            row = self.conn.execute("SELECT * FROM plant_pot WHERE id = ?", (pot_id,)).fetchone()
+        return self._row_to_pot(row) if row else None
+
+    @staticmethod
+    def _row_to_pot(row: sqlite3.Row) -> dict[str, Any]:
+        pot = {"id": row["id"], **{k: row[k] for k in POT_FIELDS}}
+        for key, kind in POT_JSON.items():
+            pot[key] = json.loads(pot[key]) if pot[key] else kind()
+        return pot
+
+    def add_pots(self, pots: list[dict[str, Any]]) -> list[int]:
+        now, ids = _now(), []
+        with self._tx() as conn:
+            for pot in pots:
+                if pot.get("kind") not in POT_KINDS or pot.get("status") not in POT_STATUSES:
+                    raise ValueError("Ongeldig bakje")
+                cur = conn.execute(
+                    f"INSERT INTO plant_pot ({', '.join(POT_FIELDS)}, created_at, updated_at)"
+                    f" VALUES ({', '.join('?' for _ in POT_FIELDS)}, ?, ?)",
+                    (*[self._pot_value(k, pot.get(k, 0 if k == "cycles" else None)) for k in POT_FIELDS], now, now),
+                )
+                ids.append(cur.lastrowid)
+        return ids
+
+    def update_pot(self, pot_id: int, **fields: Any) -> None:
+        unknown = set(fields) - set(POT_FIELDS)
+        if unknown:
+            raise ValueError(f"Onbekende velden: {', '.join(sorted(unknown))}")
+        if "status" in fields and fields["status"] not in POT_STATUSES:
+            raise ValueError(f"Onbekende status: {fields['status']}")
+        with self._tx() as conn:
+            cur = conn.execute(
+                f"UPDATE plant_pot SET {', '.join(f'{k} = ?' for k in fields)}, updated_at = ? WHERE id = ?",
+                (*[self._pot_value(k, v) for k, v in fields.items()], _now(), pot_id),
+            )
+            if cur.rowcount == 0:
+                raise KeyError(pot_id)
+
+    @staticmethod
+    def _pot_value(key: str, value: Any) -> Any:
+        if key in POT_JSON:
+            return json.dumps(value if value is not None else POT_JSON[key](), ensure_ascii=False)
+        return value
 
     # --- kweek ------------------------------------------------------------
 

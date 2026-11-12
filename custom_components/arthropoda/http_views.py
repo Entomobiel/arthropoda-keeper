@@ -201,6 +201,53 @@ class DocumentView(HomeAssistantView):
         return web.FileResponse(path, headers={"Content-Type": doc.get("content_type") or "application/octet-stream"})
 
 
+class PotPhotoView(HomeAssistantView):
+    """POST /api/arthropoda/pot_photo/{pot_id} – foto aan de tijdlijn van een bakje toevoegen.
+    GET  /api/arthropoda/pot_photo/{pot_id}?n=<index> – die foto openen."""
+
+    url = "/api/arthropoda/pot_photo/{pot_id}"
+    name = "api:arthropoda:pot_photo"
+    requires_auth = True
+
+    async def post(self, request: web.Request, pot_id: str) -> web.Response:
+        hass: HomeAssistant = request.app["hass"]
+        runtime = _runtime(hass)
+        if runtime is None or not pot_id.isdigit() or not any(
+            p["id"] == int(pot_id) for p in runtime.coordinator.pots
+        ):
+            return self.json_message("Onbekend bakje", HTTPStatus.NOT_FOUND)
+        data, content_type, _name = await _read_upload(request)
+        ext = PHOTO_TYPES.get(content_type)
+        if ext is None:
+            return self.json_message("Alleen JPG, PNG of WEBP.", HTTPStatus.BAD_REQUEST)
+        folder = photo_dir(hass) / "pots"
+        filename = f"{pot_id}_{dt_util.utcnow().strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:6]}{ext}"
+
+        def _write() -> None:
+            folder.mkdir(parents=True, exist_ok=True)
+            (folder / filename).write_bytes(data)
+
+        await hass.async_add_executor_job(_write)
+        await runtime.coordinator.async_pot_add_photo(int(pot_id), filename)
+        return self.json({"ok": True, "file": filename})
+
+    async def get(self, request: web.Request, pot_id: str) -> web.StreamResponse:
+        hass: HomeAssistant = request.app["hass"]
+        runtime = _runtime(hass)
+        if runtime is None or not pot_id.isdigit():
+            return self.json_message("Niet gevonden", HTTPStatus.NOT_FOUND)
+        pot = await hass.async_add_executor_job(runtime.db.get_pot, int(pot_id))
+        photos = (pot or {}).get("photos") or []
+        try:
+            photo = photos[int(request.query.get("n", len(photos) - 1))]
+        except (ValueError, IndexError):
+            return self.json_message("Niet gevonden", HTTPStatus.NOT_FOUND)
+        path = photo_dir(hass) / "pots" / Path(photo["file"]).name
+        if not await hass.async_add_executor_job(path.is_file):
+            return self.json_message("Bestand ontbreekt", HTTPStatus.NOT_FOUND)
+        return web.FileResponse(path)
+
+
 def async_register_views(hass: HomeAssistant) -> None:
     if hass.http is None:
         return
@@ -208,3 +255,4 @@ def async_register_views(hass: HomeAssistant) -> None:
     hass.http.register_view(CaresheetUploadView())
     hass.http.register_view(DocumentUploadView())
     hass.http.register_view(DocumentView())
+    hass.http.register_view(PotPhotoView())

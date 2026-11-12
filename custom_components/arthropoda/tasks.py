@@ -38,6 +38,8 @@ TEXTS = {
         "equipment": "Onderhoud uitrusting",
         "plant_water": "Sproeien",
         "plant_fertilize": "Bemesten",
+        "plant_sow": "Zaaien",
+        "pot_replace": "Voerbakje vervangen",
         "diapause_window": "Diapauze kan eindigen: {name}",
         "overdue": "{days} dag(en) te laat",
         "due_today": "Vandaag",
@@ -62,6 +64,8 @@ TEXTS = {
         "equipment": "Equipment maintenance",
         "plant_water": "Water",
         "plant_fertilize": "Fertilize",
+        "plant_sow": "Sow",
+        "pot_replace": "Replace food pot",
         "diapause_window": "Diapause may end: {name}",
         "overdue": "{days} day(s) overdue",
         "due_today": "Today",
@@ -102,7 +106,7 @@ class Task:
         if self.enclosure_id is not None:
             suffix = f":{self.index}" if self.index is not None else ""
             if self.plant is not None:
-                suffix = f":{self.plant}"
+                suffix = f":{self.plant}" + (f":{self.index}" if self.index is not None else "")
             return f"enc{self.enclosure_id}:{self.kind}{suffix}"
         return f"{self.animal_id}:{self.kind}"
 

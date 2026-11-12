@@ -29,6 +29,7 @@ from homeassistant.util import dt as dt_util
 from .ai_import import ImportFailed, ai_entities, async_extract, async_inat_photos
 from .caresheet import CaresheetError, dump_documents, parse_caresheets
 from .http_views import document_dir, photo_dir
+from . import food
 from .nfc import EVENT_TAG_SCANNED, deep_link
 from .const import (
     ACTUATOR_KEYS,
@@ -53,12 +54,14 @@ from .const import (
 from .db import SpeciesExistsError
 from .journal import ENTRY_TYPES
 from .plants import (
+    CONF_LIGHT_DLI,
     CONF_LIGHT_HOURS,
     CONF_PLANT_CARE,
     CONF_PLANT_CLIMATE,
     CONF_PLANTS,
     PLANT_ENTRY_TYPES,
     clean_plant_care,
+    dli_status,
     plant_info,
 )
 
@@ -278,6 +281,9 @@ def serialize_enclosures(hass: HomeAssistant) -> list[dict[str, Any]]:
                     else None
                 ),
                 "plants": plants,
+                # Voedselbakjes die nu in deze kast staan (zie food.py).
+                "dli": dli_status(hass, (enc.get("config") or {}).get(CONF_PLANTS) or []) if plants else None,
+                "pots": [serialize_pot(coordinator, p) for p in coordinator.pots if p.get("enclosure_id") == enc_id],
                 # Planten sturen het klimaat (alleen zonder dieren in de kast).
                 "plant_cabinet": plant_cabinet,
                 "actuators": [
@@ -288,6 +294,50 @@ def serialize_enclosures(hass: HomeAssistant) -> list[dict[str, Any]]:
             }
         )
     return result
+
+
+def serialize_pot(coordinator, pot: dict[str, Any]) -> dict[str, Any]:
+    """Bakje met berekende velden (naam, klaar, vervangen op, locatie)."""
+    now = dt_util.utcnow()
+    profile = coordinator.food_profiles.get(pot["plant"])
+    replace = food.replace_due(pot, profile)
+    code = lambda eid: (coordinator.enclosures.get(eid) or {}).get("code")  # noqa: E731
+    return {
+        **pot,
+        "name": coordinator.pot_label(pot),
+        "plant_name": coordinator.plant_name(pot["plant"]),
+        "ready": food.is_ready(pot, now),
+        "replace_at": replace.isoformat() if replace else None,
+        "location": code(pot.get("enclosure_id")),
+        "home": code(pot.get("home_enclosure_id")),
+        **food.stage(pot, profile, now),
+    }
+
+
+def serialize_food(hass: HomeAssistant) -> dict[str, Any]:
+    """Overzicht voor de tab Voer: planten met profiel, prognose en bakjes."""
+    _, runtime = _runtime(hass)
+    if runtime is None:
+        return {"plants": [], "pots": []}
+    coordinator = runtime.coordinator
+    known = {p for enc in coordinator.enclosures.values() for p in (enc.get("config") or {}).get(CONF_PLANTS) or []}
+    known |= {e for e in hass.states.async_entity_ids("plant")}
+    known |= set(coordinator.food_profiles) | {p["plant"] for p in coordinator.pots}
+    plants = []
+    for plant in sorted(known, key=lambda p: coordinator.plant_name(p).lower()):
+        profile = coordinator.food_profiles.get(plant)
+        plants.append({
+            "entity_id": plant,
+            "name": coordinator.plant_name(plant),
+            "picture": (hass.states.get(plant).attributes.get("entity_picture") if hass.states.get(plant) else None),
+            "profile": profile,
+            "settings": {k: food.setting(profile or {"kind": "crop"}, k) for k in
+                         ("days_to_ready", "days_in_use", "days_to_recover")},
+            "forecast": coordinator.food_forecast.get(plant),
+            "last_sown": coordinator.last_sown.get(plant),
+            "home": (coordinator.enclosures.get(coordinator.home_cabinet(plant)) or {}).get("code"),
+        })
+    return {"plants": plants, "pots": [serialize_pot(coordinator, p) for p in coordinator.pots]}
 
 
 def _error(connection, msg, code: str, message: str) -> None:
@@ -1021,6 +1071,8 @@ async def ws_enclosure_save(hass: HomeAssistant, connection, msg) -> None:
             cfg[CONF_LIGHT_HOURS] = max(0.0, min(24.0, float(raw[CONF_LIGHT_HOURS])))
         if raw.get(CONF_PLANT_CLIMATE) is False:
             cfg[CONF_PLANT_CLIMATE] = False
+        if raw.get(CONF_LIGHT_DLI) is True:
+            cfg[CONF_LIGHT_DLI] = True
         if old.get("snooze"):
             cfg["snooze"] = old["snooze"]
         item["config"] = cfg
@@ -1188,6 +1240,111 @@ async def ws_plant_entry_delete(hass: HomeAssistant, connection, msg) -> None:
     connection.send_result(msg["id"])
 
 
+@websocket_api.websocket_command({vol.Required("type"): "arthropoda/food/overview"})
+@callback
+def ws_food_overview(hass: HomeAssistant, connection, msg) -> None:
+    connection.send_result(msg["id"], serialize_food(hass))
+
+
+_DAYS = vol.Any(None, vol.All(vol.Coerce(float), vol.Range(min=0, max=365)))
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "arthropoda/food/profile/save",
+        vol.Required("plant"): vol.All(str, vol.Match(r"^plant\.")),
+        vol.Required("kind"): vol.In(("crop", "perennial")),
+        vol.Optional("days_to_ready"): _DAYS,
+        vol.Optional("days_in_use"): _DAYS,
+        vol.Optional("days_to_recover"): _DAYS,
+        vol.Optional("sow_every_days"): _DAYS,
+        vol.Optional("days_to_germinate"): _DAYS,
+    }
+)
+@websocket_api.async_response
+async def ws_food_profile_save(hass: HomeAssistant, connection, msg) -> None:
+    _, runtime = _require(hass, connection, msg)
+    if runtime is None:
+        return
+    profile = {k: (msg.get(k) or None) for k in
+               ("days_to_ready", "days_in_use", "days_to_recover", "sow_every_days", "days_to_germinate")}
+    profile["kind"] = msg["kind"]
+    await runtime.coordinator.async_save_food_profile(msg["plant"], profile)
+    connection.send_result(msg["id"], serialize_food(hass))
+
+
+async def _food_action(hass, connection, msg, action) -> None:
+    """Voer een bakje-actie uit; fouten (ook ontbrekend scanbewijs) als nette melding."""
+    _, runtime = _require(hass, connection, msg)
+    if runtime is None:
+        return
+    try:
+        result = await action(runtime.coordinator)
+    except (ValueError, KeyError) as err:
+        _error(connection, msg, "invalid", str(err))
+        return
+    connection.send_result(msg["id"], {"result": result, **serialize_food(hass)})
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "arthropoda/food/sow",
+        vol.Required("plant"): vol.All(str, vol.Match(r"^plant\.")),
+        vol.Required("enclosure_id"): int,
+        vol.Optional("count", default=1): vol.All(int, vol.Range(min=1, max=50)),
+        vol.Optional("label"): vol.Any(str, None),
+        vol.Optional("notes"): vol.Any(str, None),
+    }
+)
+@websocket_api.async_response
+async def ws_food_sow(hass: HomeAssistant, connection, msg) -> None:
+    await _food_action(hass, connection, msg, lambda c: c.async_sow(
+        msg["plant"], msg["enclosure_id"], msg["count"], msg.get("label") or None, msg.get("notes") or None))
+
+
+@websocket_api.websocket_command(
+    {vol.Required("type"): "arthropoda/pot/move", vol.Required("pot_id"): int, vol.Required("enclosure_id"): int}
+)
+@websocket_api.async_response
+async def ws_pot_move(hass: HomeAssistant, connection, msg) -> None:
+    await _food_action(hass, connection, msg, lambda c: c.async_pot_move(msg["pot_id"], msg["enclosure_id"]))
+
+
+@websocket_api.websocket_command(
+    {vol.Required("type"): "arthropoda/pot/return", vol.Required("pot_id"): int,
+     vol.Optional("enclosure_id"): vol.Any(int, None)}
+)
+@websocket_api.async_response
+async def ws_pot_return(hass: HomeAssistant, connection, msg) -> None:
+    await _food_action(hass, connection, msg, lambda c: c.async_pot_return(msg["pot_id"], msg.get("enclosure_id")))
+
+
+@websocket_api.websocket_command(
+    {vol.Required("type"): "arthropoda/pot/finish", vol.Required("pot_id"): int,
+     vol.Optional("status", default="done"): vol.In(("done", "failed"))}
+)
+@websocket_api.async_response
+async def ws_pot_finish(hass: HomeAssistant, connection, msg) -> None:
+    await _food_action(hass, connection, msg, lambda c: c.async_pot_finish(msg["pot_id"], msg["status"]))
+
+
+@websocket_api.websocket_command(
+    {vol.Required("type"): "arthropoda/pot/stage", vol.Required("pot_id"): int,
+     vol.Required("stage"): vol.In(("germinated", "ready"))}
+)
+@websocket_api.async_response
+async def ws_pot_stage(hass: HomeAssistant, connection, msg) -> None:
+    await _food_action(hass, connection, msg, lambda c: c.async_pot_stage(msg["pot_id"], msg["stage"]))
+
+
+@websocket_api.websocket_command(
+    {vol.Required("type"): "arthropoda/pot/replace", vol.Required("pot_id"): int}
+)
+@websocket_api.async_response
+async def ws_pot_replace(hass: HomeAssistant, connection, msg) -> None:
+    await _food_action(hass, connection, msg, lambda c: c.async_pot_replace(msg["pot_id"]))
+
+
 @websocket_api.websocket_command(
     {vol.Required("type"): "arthropoda/task/done", vol.Required("uid"): str}
 )
@@ -1201,7 +1358,11 @@ async def ws_task_done(hass: HomeAssistant, connection, msg) -> None:
     if task is None:
         _error(connection, msg, "not_found", "Deze taak bestaat niet (meer).")
         return
-    await runtime.coordinator.async_complete_task(task)
+    try:
+        await runtime.coordinator.async_complete_task(task)
+    except ValueError as err:  # o.a. geen scanbewijs, geen voerklaar bakje
+        _error(connection, msg, "invalid", str(err))
+        return
     connection.send_result(msg["id"])
 
 
@@ -1234,6 +1395,14 @@ def async_register_websocket(hass: HomeAssistant) -> None:
         ws_plant_log,
         ws_plant_journal,
         ws_plant_entry_delete,
+        ws_food_overview,
+        ws_food_profile_save,
+        ws_food_sow,
+        ws_pot_move,
+        ws_pot_return,
+        ws_pot_finish,
+        ws_pot_replace,
+        ws_pot_stage,
         ws_task_done,
         ws_nfc_listen,
         ws_breeding_list,

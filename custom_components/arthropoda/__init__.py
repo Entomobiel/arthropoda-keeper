@@ -20,6 +20,7 @@ from .digest import DigestManager
 from .frontend import async_register_frontend, async_unregister_panel
 from .http_views import async_register_views
 from .nag import NagManager
+from .watering import WateringManager
 from .nfc import async_setup_nfc
 from .services import async_setup_services
 from .websocket_api import async_register_websocket
@@ -48,6 +49,7 @@ class ArthropodaRuntime:
     alarms: AlarmManager
     digest: DigestManager
     nag: NagManager
+    watering: WateringManager | None = None
 
 
 type ArthropodaConfigEntry = ConfigEntry[ArthropodaRuntime]
@@ -82,7 +84,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ArthropodaConfigEntry) -
     coordinator.nag = nag
     entry.runtime_data = ArthropodaRuntime(
         db=db, coordinator=coordinator, controller=controller, alarms=alarms, digest=digest,
-        nag=nag,
+        nag=nag, watering=WateringManager(hass, coordinator),
     )
     coordinator.async_start_tracking()
     entry.async_on_unload(coordinator.async_stop_tracking)
@@ -112,6 +114,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ArthropodaConfigEntry) -
     entry.async_on_unload(digest.async_stop)
     nag.async_start()
     entry.async_on_unload(nag.async_stop)
+    entry.runtime_data.watering.async_start()
+    entry.async_on_unload(entry.runtime_data.watering.async_stop)
     controller.async_start()
     entry.async_on_unload(entry.add_update_listener(_async_update_listener))
     return True

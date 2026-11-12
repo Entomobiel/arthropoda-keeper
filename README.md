@@ -2,7 +2,7 @@
 
 Home Assistant-integratie voor het houden van insecten, spinnen, schorpioenen, pissebedden en andere geleedpotigen, inclusief waterinsecten. Elk dier of elke kolonie wordt een eigen apparaat met klimaatbewaking, tellers en een dagboek, vergelijkbaar met de plant monitor.
 
-> **Status: versie 0.10** – kern, klimaat, opvolging, paneel/kaarten, AI-caresheets, foto's, kweek, voorraad, documenten, diapauze, kasten met NFC/QR, plantenkasten met Plant Monitor en verzorgingstaken per plant, aandringen met scanbewijs. Zie [docs/ONTWERP.md](docs/ONTWERP.md).
+> **Status: versie 0.12** – kern, klimaat, opvolging, paneel/kaarten, AI-caresheets, foto's, kweek, voorraad, documenten, diapauze, kasten met NFC/QR, plantenkasten met Plant Monitor en verzorgingstaken per plant, voedselplanning met bakjes en groeifasen, sproeien op bodemvocht met pompjes, groeilampen op DLI, aandringen met scanbewijs. Zie [docs/ONTWERP.md](docs/ONTWERP.md).
 
 ## Aandringen bij taken over tijd (fase 9)
 
@@ -37,6 +37,53 @@ Planten uit [Plant Monitor](https://github.com/Olen/homeassistant-plant) (`plant
   - Is er nog nooit gesproeid, dan staat de taak op vandaag.
 - **Plantendagboek:** handelingen staan in een eigen tabel (database v4, automatische migratie met reservekopie `arthropoda.db.bak-v3`). Bij elke handeling vuurt de gebeurtenis `arthropoda_plant_entry`.
 - Grenswaarden worden via het entiteitenregister gevonden, dus hernoemde entiteiten blijven werken.
+
+## Voedselplanning (0.12)
+
+Tab **Voer**: elk bakje voedselplanten gevolgd van zaaien tot opeten. Stel per plant (⚙) in welke soort het is.
+
+- **Gewas** (gras, erwten, bonen, kool, koolzaad …):
+  1. **Zaaien** in een kast, eventueel meerdere bakjes tegelijk.
+  2. Het bakje is **voerklaar** na *dagen van zaaien tot voerklaar*.
+  3. **→ Voederen** zet het bakje in een dierenbak.
+  4. Na *dagen in de dierenbak* krijg je de taak **Voerbakje vervangen**. *Vervangen* zet het oudste voerklare bakje erin; het oude bakje is dan op.
+- **Vaste plant** (eik, liguster, braam …):
+  1. **Plant toevoegen** in de plantenkast. Hij is meteen klaar.
+  2. **→ Voederen** zet hem in een dierenbak om af te grazen.
+  3. Daarna gaat hij **↩ terug** naar de plantenkast en **herstelt** hij *dagen herstel* lang. Bij *vervangen* gebeurt dat automatisch.
+- **Zaaitaak**: *zaaien elke … dagen* geeft een vaste zaaitaak, zodat er altijd vers voer groeit.
+- **Prognose per plant**: hoeveel bakjes voerklaar zijn, hoeveel er groeien en hoeveel er in gebruik zijn.
+  - Dreigt er een tekort (een bakje moet vervangen worden en er is niets voerklaar), dan zie je **Tekort vanaf …** en staat de zaaitaak meteen op vandaag.
+- **Werkscherm**: de bakjes in die kast staan er met hun knoppen bij.
+- Taken staan ook in de takenlijst en de kalender. Het aandringen en het scanbewijs gelden ook hier.
+- **Plantendagboek**: zaaien, verplaatsen en opeten komen automatisch in het plantendagboek.
+- **Database**: database v5, met automatische migratie en een reservekopie `arthropoda.db.bak-v4`.
+- **Groeifasen**: een bakje doorloopt *gezaaid → gekiemd → voerklaar → in dierenbak → op*.
+  - Met **🌱 Gekiemd** en **✓ Klaar** zet je een fase met de hand. *Klaar* maakt het bakje meteen voerklaar.
+  - Vul je bij het profiel *dagen tot kiemen* in, dan zie je de verwachte kiemdatum. Is het bakje twee dagen daarna nog niet gekiemd, dan verschijnt **Nog niet gekiemd?**.
+- **Fototijdlijn**: met **📷** voeg je per bakje foto's toe, ook rechtstreeks met de camera van je gsm.
+  - Elke foto krijgt de fase van dat moment mee.
+  - De foto's staan in `/config/arthropoda/photos/pots/` en gaan dus mee in back-ups.
+
+## Bodemvocht, pompjes en licht (0.12)
+
+Instellingen per plant, via *Kast wijzigen → Verzorging per plant*:
+
+- **Sproeien op bodemvocht**: de sproeitaak komt alleen als de bodemvochtsensor van Plant Monitor onder het minimum van de plant zakt. Is er geen meting, dan geldt het gewone interval (*sproeien elke … dagen*).
+- **Pompje (automatisch sproeien)**:
+  - Je kiest per plant een schakelaar van je Pico W (switch, input_boolean, valve of script), met een pomptijd, een maximum aantal beurten per dag en een pauze tussen de beurten.
+  - Is de grond te droog, dan loopt het pompje één beurt. Elke beurt komt als *water gegeven (automatisch)* in het plantendagboek.
+  - Veiligheid:
+    - nooit zonder geldige meting;
+    - niet in onderhoud;
+    - na elke beurt (en na een herstart) wordt het pompje uitgeschakeld.
+  - Blijft de grond droog na twee pauzes, dan krijg je toch een sproeitaak: het pompje werkt dan misschien niet.
+- **Groeilampen op lichtsom (DLI)**: vink bij de planten van de kast *Groeilampen uit zodra de planten genoeg licht kregen* aan.
+  - De lampen gaan uit zodra de lichtsom van vandaag het hoogste minimum-DLI van de planten haalt. Daarbij telt de laagste meting, zodat elke plant genoeg licht krijgt.
+  - Binnen de daglengte blijft de gewone lichtregeling gelden.
+  - Op het werkscherm zie je *☀ Lichtsom vandaag: 6,2 / 10 mol/m²*.
+- **Werkscherm**: bij elke plant staan het bodemvocht (rood als het te droog is) en de lichtsom.
+- **Sensoren**: Arthropoda zoekt de bodemvocht- en DLI-sensoren van Plant Monitor zelf op bij de plant. Je hoeft ze niet apart te koppelen.
 
 ## Kweek, voorraad, groei en documenten (fase 6)
 

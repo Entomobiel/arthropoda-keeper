@@ -8,15 +8,17 @@ import {
   BASE_CSS, commonName, daysText, dueText, esc, fmtDate, fmtDateTime, fmtNum, getStore,
   navigate, nextTask, openAnimalDialog, openJournalDialog, quickLog, rangeBar, stageText, t, toast,
   feederFilter, field, isFeeder, openDialog, photoCredit, photoUrl,
-} from "./arthropoda-common.js?v=0.10.0";
+} from "./arthropoda-common.js?v=0.12.0";
 import {
   WORK_CSS, dims, getRound, openEnclosureDialog, openLabelsDialog, openNfcDialog, openRoundSummary,
   openTasks, renderWorkScreen, startRound, te,
-} from "./arthropoda-enclosures.js?v=0.10.0";
+} from "./arthropoda-enclosures.js?v=0.12.0";
+import { FOOD_CSS, renderFoodView } from "./arthropoda-food.js?v=0.12.0";
 
 const CSS = `
   ${BASE_CSS}
   ${WORK_CSS}
+  ${FOOD_CSS}
   .enc-code { font-size: 1.4em; font-weight: 600; }
   :host { display:block; min-height:100vh; background: var(--primary-background-color, #fafafa);
           color: var(--primary-text-color); font-family: var(--paper-font-body1_-_font-family, Roboto, sans-serif); }
@@ -95,7 +97,7 @@ const CSS = `
   }
 `;
 
-const TABS = ["collection", "enclosures", "journal", "breeding", "stock", "species", "climate"];
+const TABS = ["collection", "enclosures", "journal", "breeding", "food", "stock", "species", "climate"];
 
 class ArthropodaPanel extends HTMLElement {
   constructor() {
@@ -177,6 +179,7 @@ class ArthropodaPanel extends HTMLElement {
     else if (this._view === "enclosures") this._viewEnclosures();
     else if (this._view === "work") this._viewWork();
     else if (this._view === "stock") this._viewStock();
+    else if (this._view === "food") this._foodLoad = renderFoodView(this, this._main, h);
     this._update();
     window.scrollTo(0, 0);
     void h;
@@ -199,6 +202,15 @@ class ArthropodaPanel extends HTMLElement {
     if (this._view === "animal") {
       clearTimeout(this._extraTimer);
       this._extraTimer = setTimeout(() => this._loadAnimalExtras(), 500);
+    }
+    if (this._view === "food") {
+      // Herladen na wijzigingen (ook vanuit takenlijst of werkscherm), niet bij elke sensorwaarde.
+      const stamp = JSON.stringify((this._store.enclosures || []).map((e) => [e.id, (e.pots || []).map((p) => [p.id, p.status, p.enclosure_id]), (e.tasks || []).length]));
+      if (stamp !== this._foodStamp) {
+        this._foodStamp = stamp;
+        clearTimeout(this._extraTimer);
+        this._extraTimer = setTimeout(() => this._foodLoad?.(), 400);
+      }
     }
     if (this._view === "breeding" || this._view === "stock") {
       clearTimeout(this._extraTimer);

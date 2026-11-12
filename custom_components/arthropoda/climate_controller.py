@@ -377,6 +377,10 @@ class ClimateController:
         day_snaps = [s for s in snaps if s.is_day]
         ref = day_snaps[0] if day_snaps else snaps[0]
         ramp = float(self._tuning(snaps, CONF_LIGHT_RAMP_MINUTES))
+        # Plantenkast met DLI-sturing: genoeg licht gehad vandaag → lampen uit.
+        if day_snaps and all(getattr(s, "light_done", False) for s in day_snaps):
+            await self._apply(entity_id, control.Decision(False, "dli_reached"))
+            return GroupResult(CONF_LIGHTS, entity_id, [], "off", "dli_reached")
         decision = control.light(bool(day_snaps), dt_util.as_local(now), ref.day_start, ref.day_end, ramp)
         if entity_id.startswith("light.") and ramp:
             await self._apply(entity_id, decision)

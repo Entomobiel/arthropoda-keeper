@@ -40,15 +40,22 @@ from .const import MULTI_ACTUATOR_KEYS, SENSOR_KEYS, TUNING_KEYS
 from .db import Database
 from .journal import can_molt
 from .models import AnimalBundle
+from . import food
 from .plants import (
     CONF_LIGHT_HOURS,
     CONF_PLANT_CARE,
     CONF_PLANTS,
     EVENT_PLANT_ENTRY,
+    CARE_MOISTURE,
+    CARE_PUMP,
+    CONF_LIGHT_DLI,
     PLANT_CARE_KINDS,
     PlantSnapshot,
     _PlantRef,
+    plant_reading,
+    plant_sensor,
     plant_thresholds,
+    dli_status,
     plant_values,
     plants_steer,
 )
@@ -144,6 +151,13 @@ class ArthropodaCoordinator(DataUpdateCoordinator[dict[str, AnimalSnapshot]]):
         # Planten in plantenkasten (zonder dieren) als leden van klimaatgroepen.
         self.plant_snapshots: dict[str, PlantSnapshot] = {}
         self.plant_last: dict[str, dict[str, str]] = {}
+        # Voedselplanning (food.py): profielen per plant, actieve bakjes, laatst gezaaid.
+        self.food_profiles: dict[str, dict[str, Any]] = {}
+        self.pots: list[dict[str, Any]] = []
+        self.last_sown: dict[str, str] = {}
+        self.food_forecast: dict[str, dict[str, Any]] = {}
+        # Sinds wanneer de grond van een plant te droog is (sproeien op bodemvocht).
+        self._dry_since: dict[str, datetime] = {}
         # Aandringen en scanbewijs (NagManager, gezet in __init__.py).
         self.nag = None
         self._unsub_state: Callable[[], None] | None = None
@@ -168,6 +182,16 @@ class ArthropodaCoordinator(DataUpdateCoordinator[dict[str, AnimalSnapshot]]):
             for key in (CONF_HUMIDITY_SENSOR, CONF_WATER_TEMPERATURE_SENSOR):
                 if cfg.get(key):
                     ids.add(cfg[key])
+        # Bodemvocht en lichtsom van planten met sproeien op bodemvocht of DLI-licht.
+        for enc in self.enclosures.values():
+            cfg = enc.get("config") or {}
+            care = cfg.get(CONF_PLANT_CARE) or {}
+            for plant in cfg.get(CONF_PLANTS) or []:
+                if (care.get(plant) or {}).get(CARE_MOISTURE) or (care.get(plant) or {}).get(CARE_PUMP):
+                    if sensor := plant_sensor(self.hass, plant, "moisture"):
+                        ids.add(sensor)
+                if cfg.get(CONF_LIGHT_DLI) and (sensor := plant_sensor(self.hass, plant, "dli")):
+                    ids.add(sensor)
         return ids
 
     @callback
@@ -210,10 +234,14 @@ class ArthropodaCoordinator(DataUpdateCoordinator[dict[str, AnimalSnapshot]]):
                 self.db.list_documents(),
                 enclosures,
                 self.db.last_plant_entries(plants),
+                self.db.list_plant_profiles(),
+                self.db.list_pots(),
+                self.db.last_sown(),
             )
 
         (
             self._bundles, self.broods, self.stock, self.documents, self.enclosures, self.plant_last,
+            self.food_profiles, self.pots, self.last_sown,
         ) = await self.hass.async_add_executor_job(_load)
         result = self._compute()
         if self._unsub_state is not None or self._source_entities():
@@ -253,6 +281,7 @@ class ArthropodaCoordinator(DataUpdateCoordinator[dict[str, AnimalSnapshot]]):
             if not any(cfg.get(k) for k in climate_keys):
                 continue
             readings = self._readings(cfg)
+            light_done = bool(cfg.get(CONF_LIGHT_DLI)) and dli_status(self.hass, cfg.get(CONF_PLANTS) or [])["reached"]
             for entity_id in cfg.get(CONF_PLANTS) or []:
                 state = self.hass.states.get(entity_id)
                 values = plant_values(plant_thresholds(self.hass, entity_id), cfg.get(CONF_LIGHT_HOURS))
@@ -268,6 +297,7 @@ class ArthropodaCoordinator(DataUpdateCoordinator[dict[str, AnimalSnapshot]]):
                     day_start=day_start,
                     day_end=day_end,
                     monitored=state is not None,
+                    light_done=light_done,
                 )
         return result
 
@@ -326,7 +356,223 @@ class ArthropodaCoordinator(DataUpdateCoordinator[dict[str, AnimalSnapshot]]):
                 tasks.append(Task("", "equipment", due, float(interval), enclosure_id=enc_id,
                                   index=index, label=item.get("name") or item.get("type")))
             tasks.extend(self._plant_tasks(enc_id, enc, snooze))
+        tasks.extend(self._food_tasks(now))
         return tasks
+
+    # --- voedselplanning ---------------------------------------------------
+
+    def plant_name(self, plant: str) -> str:
+        state = self.hass.states.get(plant)
+        return (state.attributes.get("friendly_name") if state else None) or plant
+
+    def pot_label(self, pot: dict[str, Any]) -> str:
+        return pot.get("label") or f"{self.plant_name(pot['plant'])} #{pot['id']}"
+
+    def home_cabinet(self, plant: str) -> int | None:
+        """Plantenkast waar een plant gekweekt wordt (voor zaaitaken)."""
+        for pot in sorted(self.pots, key=lambda p: p["id"], reverse=True):
+            if pot["plant"] == plant and pot.get("home_enclosure_id") in self.enclosures:
+                return pot["home_enclosure_id"]
+        candidates = [
+            enc for enc in self.enclosures.values()
+            if plant in ((enc.get("config") or {}).get(CONF_PLANTS) or [])
+        ]
+        candidates.sort(key=lambda e: (e.get("type") != "plant_cabinet", e["code"]))
+        return candidates[0]["id"] if candidates else None
+
+    def _food_snooze(self, enc_id: int | None, key: str) -> datetime | None:
+        iso = (((self.enclosures.get(enc_id) or {}).get("config") or {}).get("snooze") or {}).get(key)
+        return dt_util.parse_datetime(iso) if iso else None
+
+    def _food_tasks(self, now: datetime) -> list[Task]:
+        """Zaai- en vervangtaken, plus de voorraadprognose per plant."""
+        tasks: list[Task] = []
+        by_plant: dict[str, list[dict[str, Any]]] = {}
+        for pot in self.pots:
+            by_plant.setdefault(pot["plant"], []).append(pot)
+        self.food_forecast = {}
+        for plant in sorted(set(by_plant) | set(self.food_profiles)):
+            profile = self.food_profiles.get(plant)
+            pots = by_plant.get(plant, [])
+            outlook = food.forecast(pots, profile, now)
+            self.food_forecast[plant] = outlook
+            for pot in pots:
+                due = food.replace_due(pot, profile)
+                if due is None or pot.get("enclosure_id") not in self.enclosures:
+                    continue
+                key = f"{food.TASK_REPLACE}:{plant}:{pot['id']}"
+                if (snooze := self._food_snooze(pot["enclosure_id"], key)) and snooze > due:
+                    due = snooze
+                tasks.append(Task("", food.TASK_REPLACE, due, food.setting(profile, "days_in_use") or 0.0,
+                                  enclosure_id=pot["enclosure_id"], index=pot["id"],
+                                  label=self.pot_label(pot), plant=plant))
+            shortfall = dt_util.parse_datetime(outlook["shortfall"]) if outlook["shortfall"] else None
+            last = dt_util.parse_datetime(self.last_sown[plant]) if plant in self.last_sown else None
+            due = food.sow_due(profile, last, shortfall, now)
+            home = self.home_cabinet(plant) if due is not None else None
+            if due is None or home is None:
+                continue
+            key = f"{food.TASK_SOW}:{plant}"
+            if (snooze := self._food_snooze(home, key)) and snooze > due:
+                due = snooze
+            tasks.append(Task("", food.TASK_SOW, due, float((profile or {}).get("sow_every_days") or 0),
+                              enclosure_id=home, label=self.plant_name(plant), plant=plant))
+        return tasks
+
+    def _food_task(self, kind: str, plant: str, pot_id: int | None = None) -> Task | None:
+        return next(
+            (t for t in self.enclosure_tasks
+             if t.kind == kind and t.plant == plant and (pot_id is None or t.index == pot_id)),
+            None,
+        )
+
+    def _check_food_task(self, kind: str, plant: str, pot_id: int | None = None) -> None:
+        """Scanbewijs als de bijhorende taak over tijd is."""
+        task = self._food_task(kind, plant, pot_id)
+        if task is not None and self.nag is not None:
+            self.nag.check_equipment_allowed(task)
+
+    async def async_save_food_profile(self, plant: str, profile: dict[str, Any]) -> None:
+        await self.hass.async_add_executor_job(self.db.save_plant_profile, plant, profile)
+        await self.async_refresh()
+
+    async def async_sow(
+        self, plant: str, enclosure_id: int, count: int = 1,
+        label: str | None = None, notes: str | None = None,
+    ) -> list[int]:
+        """Bakje(s) inzaaien (gewas) of een vaste plant toevoegen, in een kast."""
+        if enclosure_id not in self.enclosures:
+            raise ValueError("Onbekende kast")
+        profile = self.food_profiles.get(plant) or {"kind": "crop"}
+        kind = profile.get("kind") or "crop"
+        if kind == "crop":
+            self._check_food_task(food.TASK_SOW, plant)
+        now = dt_util.utcnow()
+        stamp = now.isoformat()
+        base = {"plant": plant, "kind": kind, "enclosure_id": enclosure_id,
+                "home_enclosure_id": enclosure_id, "status_since": stamp, "notes": notes,
+                "stages": {"sown" if kind == "crop" else "added": stamp}, "photos": []}
+        if kind == "crop":
+            ready = now + timedelta(days=food.setting(profile, "days_to_ready") or 0)
+            base.update(status="growing", sown_at=stamp, ready_at=ready.isoformat())
+        else:
+            base.update(status="recovering", ready_at=stamp)
+        count = max(1, min(int(count), 50))
+        pots = [{**base, "label": (f"{label} {i + 1}" if count > 1 else label) if label else None}
+                for i in range(count)]
+        ids = await self.hass.async_add_executor_job(self.db.add_pots, pots)
+        if kind == "crop":
+            await self.async_log_plants(
+                [plant], "sown", notes=notes, enclosure_id=enclosure_id,
+                data={"pots": ids, "source": "food"},
+            )
+        else:
+            await self.async_refresh()
+        return ids
+
+    def _pot(self, pot_id: int) -> dict[str, Any]:
+        pot = next((p for p in self.pots if p["id"] == pot_id), None)
+        if pot is None:
+            raise ValueError("Dit bakje bestaat niet (meer).")
+        return pot
+
+    async def _log_pot(self, pot: dict[str, Any], entry_type: str, enclosure_id: int | None, **data: Any) -> None:
+        await self.async_log_plants(
+            [pot["plant"]], entry_type, enclosure_id=enclosure_id,
+            data={"pot": pot["id"], "label": self.pot_label(pot), "source": "food", **data},
+        )
+
+    async def async_pot_move(self, pot_id: int, enclosure_id: int) -> None:
+        """Bakje vanuit de plantenkast in een (dieren)bak zetten."""
+        pot = self._pot(pot_id)
+        if pot["status"] not in ("growing", "recovering"):
+            raise ValueError("Dit bakje staat al in een bak.")
+        if enclosure_id not in self.enclosures:
+            raise ValueError("Onbekende kast")
+        now = dt_util.utcnow().isoformat()
+        await self.hass.async_add_executor_job(
+            lambda: self.db.update_pot(pot_id, status="in_use", enclosure_id=enclosure_id, status_since=now,
+                                       stages={**(pot.get("stages") or {}), "fed": now})
+        )
+        await self._log_pot(pot, "moved", enclosure_id, to=self.enclosures[enclosure_id]["code"])
+
+    async def async_pot_return(self, pot_id: int, enclosure_id: int | None = None) -> None:
+        """Vaste plant terug naar de plantenkast om te herstellen."""
+        pot = self._pot(pot_id)
+        if pot["kind"] != "perennial" or pot["status"] != "in_use":
+            raise ValueError("Alleen een vaste plant in een bak kan terug.")
+        home = enclosure_id or pot.get("home_enclosure_id")
+        if home not in self.enclosures:
+            raise ValueError("Onbekende kast")
+        now = dt_util.utcnow()
+        days = food.setting(self.food_profiles.get(pot["plant"]), "days_to_recover") or 0
+        await self.hass.async_add_executor_job(
+            lambda: self.db.update_pot(
+                pot_id, status="recovering", enclosure_id=home, home_enclosure_id=home,
+                status_since=now.isoformat(), ready_at=(now + timedelta(days=days)).isoformat(),
+                cycles=(pot.get("cycles") or 0) + 1,
+                stages={**(pot.get("stages") or {}), "back": now.isoformat()},
+            )
+        )
+        await self._log_pot(pot, "moved", home, to=self.enclosures[home]["code"], back=True)
+
+    async def async_pot_finish(self, pot_id: int, status: str = "done") -> None:
+        """Bakje is op (of mislukt) en verdwijnt uit de planning."""
+        pot = self._pot(pot_id)
+        if status not in ("done", "failed"):
+            raise ValueError("Ongeldige status")
+        now = dt_util.utcnow().isoformat()
+        await self.hass.async_add_executor_job(
+            lambda: self.db.update_pot(pot_id, status=status, status_since=now,
+                                       stages={**(pot.get("stages") or {}), status: now})
+        )
+        await self._log_pot(pot, "harvested" if status == "done" else "note", pot.get("enclosure_id"),
+                            status=status)
+
+    async def async_pot_stage(self, pot_id: int, stage: str) -> None:
+        """Groeifase met de hand zetten: 'germinated' (gekiemd) of 'ready' (voerklaar/hersteld)."""
+        pot = self._pot(pot_id)
+        if stage not in ("germinated", "ready") or pot["status"] not in ("growing", "recovering"):
+            raise ValueError("Deze fase kan hier niet gezet worden.")
+        if stage == "germinated" and pot["kind"] != "crop":
+            raise ValueError("Alleen een gewas kiemt.")
+        now = dt_util.utcnow().isoformat()
+        fields: dict[str, Any] = {"stages": {**(pot.get("stages") or {}), stage: now}}
+        if stage == "ready":
+            fields["ready_at"] = now
+        await self.hass.async_add_executor_job(lambda: self.db.update_pot(pot_id, **fields))
+        await self.async_refresh()
+
+    async def async_pot_add_photo(self, pot_id: int, filename: str) -> None:
+        """Foto aan de tijdlijn van een bakje toevoegen (met de huidige groeifase)."""
+        pot = self._pot(pot_id)
+        now = dt_util.utcnow()
+        current = food.stage(pot, self.food_profiles.get(pot["plant"]), now)["stage"]
+        photos = [*(pot.get("photos") or []), {"file": filename, "ts": now.isoformat(), "stage": current}]
+        await self.hass.async_add_executor_job(lambda: self.db.update_pot(pot_id, photos=photos))
+        await self.async_refresh()
+
+    async def async_pot_replace(self, pot_id: int) -> int:
+        """Bakje in een dierenbak vervangen door het oudste voerklare bakje van dezelfde plant."""
+        old = self._pot(pot_id)
+        if old["status"] != "in_use":
+            raise ValueError("Dit bakje staat niet in een bak.")
+        self._check_food_task(food.TASK_REPLACE, old["plant"], pot_id)
+        now = dt_util.utcnow()
+        ready = sorted(
+            (p for p in self.pots if p["plant"] == old["plant"] and p["id"] != pot_id and food.is_ready(p, now)),
+            key=lambda p: (food.ready_time(p, now), p["id"]),
+        )
+        if not ready:
+            raise ValueError(f"Geen voerklaar bakje van {self.plant_name(old['plant'])}. Zaai bij of kies 'Eruit'.")
+        new = ready[0]
+        target = old["enclosure_id"]
+        if old["kind"] == "perennial":
+            await self.async_pot_return(pot_id)
+        else:
+            await self.async_pot_finish(pot_id, "done")
+        await self.async_pot_move(new["id"], target)
+        return new["id"]
 
     def _plant_tasks(self, enc_id: int, enc: dict[str, Any], snooze: dict[str, datetime]) -> list[Task]:
         """Sproeien/bemesten per plant volgens het interval dat in de kast is ingesteld."""
@@ -337,11 +583,23 @@ class ArthropodaCoordinator(DataUpdateCoordinator[dict[str, AnimalSnapshot]]):
             last = self.plant_last.get(plant) or {}
             state = self.hass.states.get(plant)
             name = state.attributes.get("friendly_name") if state else None
+            settings = care.get(plant) or {}
             for kind, entry_type in PLANT_CARE_KINDS.items():
-                interval = (care.get(plant) or {}).get(kind)
+                interval = settings.get(kind)
+                done = dt_util.parse_datetime(last.get(entry_type) or "")
+                if kind == "plant_water" and settings.get(CARE_MOISTURE):
+                    due = self._moisture_due(plant, settings, done)
+                    if due is not None:
+                        key = f"{kind}:{plant}"
+                        if due is not False:
+                            if snooze.get(key) and snooze[key] > due:
+                                due = snooze[key]
+                            tasks.append(Task("", kind, due, float(interval or 0), enclosure_id=enc_id,
+                                              label=name or plant, plant=plant))
+                        continue
+                    # Geen bodemvochtmeting: terugvallen op het interval (als dat er is).
                 if not interval:
                     continue
-                done = dt_util.parse_datetime(last.get(entry_type) or "")
                 # Nog nooit gedaan: vandaag te doen (niet meteen 'te laat').
                 due = (done + timedelta(days=float(interval))) if done else dt_util.start_of_local_day()
                 key = f"{kind}:{plant}"
@@ -350,6 +608,32 @@ class ArthropodaCoordinator(DataUpdateCoordinator[dict[str, AnimalSnapshot]]):
                 tasks.append(Task("", kind, due, float(interval), enclosure_id=enc_id,
                                   label=name or plant, plant=plant))
         return tasks
+
+    def _moisture_due(self, plant: str, settings: dict[str, Any], watered: datetime | None):
+        """Sproeitaak op bodemvocht.
+
+        Geeft None (geen meting → interval gebruiken), False (vochtig genoeg of net
+        gesproeid → geen taak) of de vervaldag (sinds wanneer de grond te droog is).
+        Met een pomp komt er pas een taak als de pomp het niet oploste
+        (nog steeds droog na twee pompbeurten).
+        """
+        moisture = plant_reading(self.hass, plant, "moisture")
+        low = (plant_thresholds(self.hass, plant).get("moisture") or [None])[0]
+        if moisture is None or low is None:
+            self._dry_since.pop(plant, None)
+            return None
+        now = dt_util.utcnow()
+        if moisture >= low:
+            self._dry_since.pop(plant, None)
+            return False
+        since = self._dry_since.setdefault(plant, now)
+        if watered is not None and now - watered < timedelta(hours=3):
+            return False  # net gesproeid; de sensor heeft even tijd nodig
+        if settings.get(CARE_PUMP):
+            grace = timedelta(minutes=2 * float(settings.get("pump_pause_minutes") or 60))
+            if now - since < grace:
+                return False
+        return since
 
     # --- collectie-overzicht (kweek, voorraad, documenten) -----------------
 
@@ -603,6 +887,12 @@ class ArthropodaCoordinator(DataUpdateCoordinator[dict[str, AnimalSnapshot]]):
         if task.enclosure_id is None:
             await self.async_log([task.animal_id], task.journal_type, data={"source": "todo"})
             return
+        if task.kind == food.TASK_SOW:
+            await self.async_sow(task.plant, task.enclosure_id)
+            return
+        if task.kind == food.TASK_REPLACE:
+            await self.async_pot_replace(task.index)
+            return
         if task.plant is not None:
             await self.async_log_plants(
                 [task.plant], PLANT_CARE_KINDS[task.kind],
@@ -655,7 +945,7 @@ class ArthropodaCoordinator(DataUpdateCoordinator[dict[str, AnimalSnapshot]]):
             return
         enc = self.enclosures[task.enclosure_id]
         if task.plant is not None:
-            key = f"{task.kind}:{task.plant}"
+            key = f"{task.kind}:{task.plant}" + (f":{task.index}" if task.index is not None else "")
         else:
             key = f"equipment:{task.index}" if task.kind == "equipment" else task.kind
         config = dict(enc.get("config") or {})

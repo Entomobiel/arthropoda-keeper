@@ -27,13 +27,15 @@ from .profile import Readings, target_temperature
 CONF_PLANTS = "plants"
 CONF_LIGHT_HOURS = "light_hours"
 CONF_PLANT_CLIMATE = "plant_climate"
+# Groeilampen uit zodra de lichtsom (DLI) van de planten bereikt is.
+CONF_LIGHT_DLI = "light_dli"
 ENCLOSURE_PLANT_KEYS = (CONF_PLANTS, CONF_LIGHT_HOURS, CONF_PLANT_CLIMATE)
 
 # Grootheden die de klimaatregeling gebruikt (en die we tonen).
 THRESHOLDS = ("temperature", "humidity", "illuminance", "dli", "moisture")
 
 PLANT_ENTRY_TYPES = (
-    "watered", "fertilized", "pruned", "repotted", "harvested", "pest", "sown", "note",
+    "watered", "fertilized", "pruned", "repotted", "harvested", "pest", "sown", "moved", "note",
 )
 
 EVENT_PLANT_ENTRY = "arthropoda_plant_entry"
@@ -44,15 +46,23 @@ CONF_PLANT_CARE = "plant_care"
 PLANT_CARE_KINDS = {"plant_water": "watered", "plant_fertilize": "fertilized"}
 
 
-def clean_plant_care(raw: Any, plants: list[str]) -> dict[str, dict[str, float]]:
-    """Alleen geldige intervallen (dagen > 0) voor planten die in de kast staan."""
-    result: dict[str, dict[str, float]] = {}
+# Sproeien op bodemvocht en automatische pomp (zie watering.py)
+CARE_MOISTURE = "water_on_moisture"
+CARE_PUMP = "pump"
+PUMP_DEFAULTS = {"pump_seconds": 5.0, "pump_max_per_day": 3.0, "pump_pause_minutes": 60.0}
+PUMP_LIMITS = {"pump_seconds": 120.0, "pump_max_per_day": 24.0, "pump_pause_minutes": 1440.0}
+PUMP_DOMAINS = ("switch.", "input_boolean.", "valve.", "script.")
+
+
+def clean_plant_care(raw: Any, plants: list[str]) -> dict[str, dict[str, Any]]:
+    """Alleen geldige instellingen voor planten die in de kast staan."""
+    result: dict[str, dict[str, Any]] = {}
     if not isinstance(raw, dict):
         return result
     for plant, intervals in raw.items():
         if plant not in plants or not isinstance(intervals, dict):
             continue
-        clean = {}
+        clean: dict[str, Any] = {}
         for kind in PLANT_CARE_KINDS:
             try:
                 days = float(intervals.get(kind) or 0)
@@ -60,6 +70,17 @@ def clean_plant_care(raw: Any, plants: list[str]) -> dict[str, dict[str, float]]
                 continue
             if days > 0:
                 clean[kind] = min(days, 365.0)
+        if intervals.get(CARE_MOISTURE) is True:
+            clean[CARE_MOISTURE] = True
+        pump = intervals.get(CARE_PUMP)
+        if isinstance(pump, str) and pump.startswith(PUMP_DOMAINS):
+            clean[CARE_PUMP] = pump
+            for key, default in PUMP_DEFAULTS.items():
+                try:
+                    value = float(intervals.get(key) or default)
+                except (TypeError, ValueError):
+                    value = default
+                clean[key] = max(1.0, min(value, PUMP_LIMITS[key]))
         if clean:
             result[plant] = clean
     return result
@@ -101,6 +122,41 @@ def plant_thresholds(hass: HomeAssistant, plant_entity_id: str) -> dict[str, lis
     return result
 
 
+def plant_sensor(hass: HomeAssistant, plant_entity_id: str, quantity: str) -> str | None:
+    """Sensor van Plant Monitor bij een plant: 'moisture' (bodemvocht) of 'dli' (lichtsom).
+
+    Gezocht onder de sensoren van dezelfde integratie-entry: eerst op unique_id
+    ("<entry>-current-moisture", "<entry>-dli"), anders op device_class/eenheid.
+    """
+    registry = er.async_get(hass)
+    entry = registry.async_get(plant_entity_id)
+    if entry is None or not entry.config_entry_id:
+        return None
+    sensors = [
+        e for e in er.async_entries_for_config_entry(registry, entry.config_entry_id)
+        if e.domain == "sensor"
+    ]
+    suffix = {"moisture": "-current-moisture", "dli": "-dli"}[quantity]
+    for sensor in sensors:
+        if (sensor.unique_id or "").endswith(suffix):
+            return sensor.entity_id
+    for sensor in sensors:
+        state = hass.states.get(sensor.entity_id)
+        attrs = state.attributes if state else {}
+        device_class = sensor.device_class or sensor.original_device_class or attrs.get("device_class")
+        unit = str(attrs.get("unit_of_measurement") or sensor.unit_of_measurement or "")
+        if quantity == "moisture" and device_class == "moisture":
+            return sensor.entity_id
+        if quantity == "dli" and "mol" in unit and "/s" not in unit:
+            return sensor.entity_id
+    return None
+
+
+def plant_reading(hass: HomeAssistant, plant_entity_id: str, quantity: str) -> float | None:
+    """Actuele waarde van bodemvocht (%) of lichtsom (mol/m²/dag), None als onbekend."""
+    return _number(hass, plant_sensor(hass, plant_entity_id, quantity))
+
+
 def plant_info(hass: HomeAssistant, plant_entity_id: str) -> dict[str, Any]:
     """Naam, toestand, problemen en foto van een plant (voor paneel en werkscherm)."""
     state = hass.states.get(plant_entity_id)
@@ -122,6 +178,8 @@ def plant_info(hass: HomeAssistant, plant_entity_id: str) -> dict[str, Any]:
         "problems": list(problems or []),
         "statuses": statuses,
         "thresholds": plant_thresholds(hass, plant_entity_id) if state else {},
+        "moisture": plant_reading(hass, plant_entity_id, "moisture") if state else None,
+        "dli": plant_reading(hass, plant_entity_id, "dli") if state else None,
     }
 
 
@@ -151,6 +209,8 @@ class PlantSnapshot:
     climate_enabled: bool = True
     monitored: bool = True
     problems: list[str] = field(default_factory=list)
+    # Lichtsom (DLI) van vandaag bereikt → groeilampen mogen uit (CONF_LIGHT_DLI).
+    light_done: bool = False
 
     @property
     def target_temperature(self) -> list[float] | None:
@@ -168,6 +228,22 @@ def plant_values(thresholds: dict[str, list[float]], light_hours: float | None) 
     if light_hours:
         values["light_hours"] = float(light_hours)
     return values
+
+
+def dli_status(hass: HomeAssistant, plants: list[str]) -> dict[str, Any]:
+    """Lichtsom van een kast: doel = hoogste minimum-DLI, gemeten = laagste meting.
+
+    Zo krijgt elke plant minstens haar minimum. Zonder doel of meting: niet bereikt.
+    """
+    targets = [t["dli"][0] for p in plants if (t := plant_thresholds(hass, p)).get("dli")]
+    readings = [r for p in plants if (r := plant_reading(hass, p, "dli")) is not None]
+    target = max(targets) if targets else None
+    current = min(readings) if readings else None
+    return {
+        "target": target,
+        "current": current,
+        "reached": target is not None and current is not None and current >= target,
+    }
 
 
 def plants_steer(enclosure: dict[str, Any], has_animals: bool) -> bool:
