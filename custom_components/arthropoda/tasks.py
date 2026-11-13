@@ -24,6 +24,13 @@ TASK_KINDS: dict[str, tuple[str, str, str]] = {
     "water_change": ("water_change_interval_days", "water_change", "water_change"),
     # Geen interval: eenmalige taak tijdens een diapauze.
     "diapause_end": ("", "", "diapause_end"),
+    # Mieren: voedselstromen en restjes (interval uit ants.py, niet uit het profiel)
+    "ant_water": ("", "", "water_refill"),
+    "ant_sugar": ("", "", "feed_sugar"),
+    "ant_protein": ("", "", "feeding"),
+    "ant_seeds": ("", "", "feed_seeds"),
+    "ant_leaves": ("", "", "feed_leaves"),
+    "ant_leftovers": ("", "", "remove_leftovers"),
 }
 
 EGG_TYPES = ("egg_sac", "ootheca", "egg_laying")
@@ -40,6 +47,13 @@ TEXTS = {
         "plant_fertilize": "Bemesten",
         "plant_sow": "Zaaien",
         "pot_replace": "Voerbakje vervangen",
+        "ant_water": "Water (mieren)",
+        "ant_sugar": "Suikerwater",
+        "ant_protein": "Eiwit (insecten)",
+        "ant_seeds": "Zaden",
+        "ant_leaves": "Vers blad",
+        "ant_leftovers": "Voedselresten verwijderen",
+        "module_wet": "Gips bevochtigen",
         "diapause_window": "Diapauze kan eindigen: {name}",
         "overdue": "{days} dag(en) te laat",
         "due_today": "Vandaag",
@@ -67,6 +81,13 @@ TEXTS = {
         "plant_fertilize": "Fertilize",
         "plant_sow": "Sow",
         "pot_replace": "Replace food pot",
+        "ant_water": "Water (ants)",
+        "ant_sugar": "Sugar water",
+        "ant_protein": "Protein (insects)",
+        "ant_seeds": "Seeds",
+        "ant_leaves": "Fresh leaves",
+        "ant_leftovers": "Remove food leftovers",
+        "module_wet": "Moisten plaster",
         "diapause_window": "Diapause may end: {name}",
         "overdue": "{days} day(s) overdue",
         "due_today": "Today",

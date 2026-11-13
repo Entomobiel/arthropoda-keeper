@@ -139,3 +139,58 @@ care_profiles:
     water_change_interval_days: 7
     cleaning_interval_days: 30
 source: "Voorbeeldwaarden Arthropoda Keeper – controleren"
+---
+format: arthropoda-caresheet/1
+species:
+  scientific_name: Lasius niger
+  common_names: {nl: Zwarte wegmier, en: Black garden ant}
+  group: ant
+  development: holometabolous
+  habitat: terrestrial
+  taxonomy: {class: Insecta, order: Hymenoptera, family: Formicidae}
+  ant:
+    type: generalist
+    founding: claustral
+    polygyne: false
+    polymorphic: false
+    development_days: {egg_to_worker: [42, 60]}
+    food: {water: 7, sugar: 4, protein: 4}
+    queen_check_days: 60
+  diapause: {min_days: 90, max_days: 150, start_months: [11], notes: "Winterrust koel (± 5–10 °C), ook voor jonge kolonies"}
+  lifespan: {female_years: [15, 29]}
+  notes: "Zeer geschikte beginnerssoort. Kolonies kunnen groot worden."
+care_profiles:
+  - temp_day: [20, 27]
+    humidity: [50, 70]
+    feeding_interval_days: 4
+  - season: winter
+    months: [11, 12, 1, 2, 3]
+    temp_day: [5, 10]
+source: "Voorbeeldwaarden Arthropoda Keeper – controleren"
+---
+format: arthropoda-caresheet/1
+species:
+  scientific_name: Messor barbarus
+  common_names: {nl: Oogstmier, en: Harvester ant}
+  group: ant
+  development: holometabolous
+  habitat: terrestrial
+  taxonomy: {class: Insecta, order: Hymenoptera, family: Formicidae}
+  ant:
+    type: harvester
+    founding: claustral
+    polygyne: false
+    polymorphic: true
+    development_days: {egg_to_worker: [42, 63]}
+    food: {water: 7, seeds: 7, protein: 7}
+    queen_check_days: 60
+  diapause: {min_days: 60, max_days: 120, start_months: [12], notes: "Milde winterrust (± 15–18 °C) wordt vaak aangeraden"}
+  diet: {seeds: [graszaad, chiazaad, maanzaad, gierst], prey: [fruitvlieg, krekel]}
+  notes: "Zaden droog bewaren; schimmelende zaden uit het nest verwijderen."
+care_profiles:
+  - temp_day: [24, 30]
+    humidity: [40, 60]
+  - season: winter
+    months: [12, 1, 2]
+    temp_day: [15, 18]
+source: "Voorbeeldwaarden Arthropoda Keeper – controleren"

@@ -9,17 +9,19 @@ import {
   navigate, nextTask, openAnimalDialog, openJournalDialog, quickLog, rangeBar, stageText, t, toast,
   feederFilter, field, isFeeder, openDialog, photoCredit, photoUrl,
   INSIGHT_ICON, insightChips, insightText, ti,
-} from "./arthropoda-common.js?v=0.13.0";
+} from "./arthropoda-common.js?v=0.14.0";
 import {
   WORK_CSS, dims, getRound, openEnclosureDialog, openLabelsDialog, openNfcDialog, openRoundSummary,
   openTasks, renderWorkScreen, startRound, te,
-} from "./arthropoda-enclosures.js?v=0.13.0";
-import { FOOD_CSS, renderFoodView } from "./arthropoda-food.js?v=0.13.0";
+} from "./arthropoda-enclosures.js?v=0.14.0";
+import { FOOD_CSS, renderFoodView } from "./arthropoda-food.js?v=0.14.0";
+import { ANTS_CSS, antCard, handleAntClick, renderAntsView } from "./arthropoda-ants.js?v=0.14.0";
 
 const CSS = `
   ${BASE_CSS}
   ${WORK_CSS}
   ${FOOD_CSS}
+  ${ANTS_CSS}
   .enc-code { font-size: 1.4em; font-weight: 600; }
   :host { display:block; min-height:100vh; background: var(--primary-background-color, #fafafa);
           color: var(--primary-text-color); font-family: var(--paper-font-body1_-_font-family, Roboto, sans-serif); }
@@ -98,7 +100,7 @@ const CSS = `
   }
 `;
 
-const TABS = ["collection", "enclosures", "journal", "breeding", "food", "stock", "species", "climate"];
+const TABS = ["collection", "ants", "enclosures", "journal", "breeding", "food", "stock", "species", "climate"];
 
 class ArthropodaPanel extends HTMLElement {
   constructor() {
@@ -181,6 +183,7 @@ class ArthropodaPanel extends HTMLElement {
     else if (this._view === "work") this._viewWork();
     else if (this._view === "stock") this._viewStock();
     else if (this._view === "food") this._foodLoad = renderFoodView(this, this._main, h);
+    else if (this._view === "ants") this._antsDraw = renderAntsView(this, this._main, h);
     this._update();
     window.scrollTo(0, 0);
     void h;
@@ -194,7 +197,7 @@ class ArthropodaPanel extends HTMLElement {
     }
     const fn = { collection: this._updateCollection, animal: this._updateAnimal,
                  climate: this._updateClimate, enclosures: this._updateEnclosures,
-                 work: () => this._workDraw?.() }[this._view];
+                 work: () => this._workDraw?.(), ants: () => this._antsDraw?.() }[this._view];
     if (fn) fn.call(this);
     if (this._view === "animal" || this._view === "journal") {
       clearTimeout(this._journalTimer);
@@ -411,6 +414,7 @@ class ArthropodaPanel extends HTMLElement {
           ${i.key === "premolt_suspected" ? `<button class="ak primary" data-quick="premolt_observed">${esc(ti(h, "confirm_premolt"))}</button>` : ""}
           ${i.key === "pairing_window" ? `<button class="ak" data-entry-type="pairing">${esc(ti(h, "log_pairing"))}</button>` : ""}
         </div>`).join("")}</div>` : ""}
+      ${a.ant ? `<div style="margin-bottom:14px">${antCard(h, a)}</div>` : ""}
       <div class="detail">
         <div class="card photo-box">
           ${photoUrl(h, a) ? `<img src="${esc(photoUrl(h, a))}" alt="${esc(a.name)}">` : `<div class="ph">🕷</div>`}
@@ -472,6 +476,9 @@ class ArthropodaPanel extends HTMLElement {
     if (!btn || this._view !== "animal") return;
     const id = this._animalId;
     if (btn.hasAttribute("data-back")) return navigate("/arthropoda?view=collection");
+    if (btn.dataset.antFeed || btn.dataset.antCensus || btn.dataset.antSettings || btn.dataset.antLeftovers) {
+      return handleAntClick(this, this._hass, btn);
+    }
     if (btn.dataset.quick) return quickLog(this, this._hass, id, btn.dataset.quick);
     if (btn.hasAttribute("data-entry")) return openJournalDialog(this._hass, [id]);
     if (btn.dataset.entryType) return openJournalDialog(this._hass, [id], btn.dataset.entryType);

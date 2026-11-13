@@ -5,9 +5,10 @@ import {
   NUMBER, dueText, entityField, esc, field, fmtDate, fmtNum, getStore, openDialog,
   INSIGHT_ICON, insightText,
   openJournalDialog, photoUrl, readForm, selectHtml, toast, wireMulti,
-} from "./arthropoda-common.js?v=0.13.0";
-import { qrSvg } from "./arthropoda-qr.js?v=0.13.0";
-import { handlePotClick, potsCard } from "./arthropoda-food.js?v=0.13.0";
+} from "./arthropoda-common.js?v=0.14.0";
+import { qrSvg } from "./arthropoda-qr.js?v=0.14.0";
+import { handlePotClick, potsCard } from "./arthropoda-food.js?v=0.14.0";
+import { antsWorkCard, handleAntClick, modulesCard, modulesEditor } from "./arthropoda-ants.js?v=0.14.0";
 
 const ENC_TYPES = ["terrarium", "faunabox", "breeding_box", "formicarium", "aquarium", "net_cage", "plant_cabinet", "other"];
 const ENC_STATUSES = ["in_use", "empty", "maintenance"];
@@ -175,6 +176,7 @@ export function openEnclosureDialog(hass, enc = null) {
     }).filter(Boolean)),
   ]));
 
+  const mods = modulesEditor(hass, cfg.modules || enc?.modules || []);
   openDialog(hass, enc ? `${te(hass, "edit")}: ${enc.code}` : te(hass, "add_enclosure"), (body) => {
     body.innerHTML = `
       <fieldset><legend>${esc(te(hass, "enclosure"))}</legend><div class="ak-grid">
@@ -228,12 +230,14 @@ export function openEnclosureDialog(hass, enc = null) {
         ${field("Op-/afdimmen (min)", NUMBER("light_ramp_minutes", cfg.light_ramp_minutes ?? 0))}
         ${field("Vaste vernevelmomenten", `<input name="mist_times" value="${esc(cfg.mist_times || "")}" placeholder="08:00, 20:00">`)}
       </div></fieldset>
+      ${mods.html}
       <fieldset><legend>${esc(te(hass, "equipment"))}</legend>
         <div data-eq-list>${(enc?.equipment || []).map(equipmentRow).join("")}</div>
         <button type="button" class="ak-btn" data-eq-add>＋ ${esc(te(hass, "add_equipment"))}</button>
       </fieldset>
       ${enc ? `<button type="button" class="ak-btn" data-enc-delete style="color:var(--error-color,#c62828)">${esc(te(hass, "delete"))}</button>` : ""}`;
     wireMulti(body);
+    mods.wire(body);
     const plantChips = body.querySelector('[data-multi="plants"] .chips');
     if (plantChips) {
       new MutationObserver(() => {
@@ -262,6 +266,7 @@ export function openEnclosureDialog(hass, enc = null) {
     const config = Object.fromEntries(climateKeys.map((k) => [k, data[k]]));
     Object.assign(config, { plants: data.plants || [], light_hours: data.light_hours, plant_climate: data.plant_climate !== false, light_dli: data.light_dli === true,
       plant_care: readCare(body) });
+    config.modules = mods.read(body);
     const equipment = [...body.querySelectorAll(".ak-eq")].map((row) => {
       const get = (k) => row.querySelector(`[data-eq="${k}"]`).value;
       return { name: get("name") || null, interval_days: get("interval_days") ? Number(get("interval_days")) : null,
@@ -582,6 +587,8 @@ export function renderWorkScreen(host, box, hass, code, { onEdit, onBack }) {
       <input type="file" accept="image/*" capture="environment" data-file hidden>` : (enc.plants || []).length ? "" : `<p class="muted">${esc(te(hass, "no_residents"))}</p>`}
       ${plantsHtml(hass, enc, selectedPlants)}
       ${potsCard(hass, enc)}
+      ${antsWorkCard(hass, residents)}
+      ${modulesCard(hass, enc)}
       <div class="card"><h3>${esc(te(hass, "tasks_today"))}</h3>
         ${tasks.length ? tasks.map((tk) => `<div class="task"><button data-task="${esc(tk.uid)}" title="✓">✓</button>
           <div class="grow"><b>${esc(tk.plant ? `${taskLabel(hass, tk.kind)}: ${tk.label}` : (tk.label || taskLabel(hass, tk.kind)))}</b><div class="muted small">${esc(tk.target)} · ${esc(dueText(hass, tk.due))}</div></div></div>`).join("")
@@ -646,6 +653,7 @@ export function renderWorkScreen(host, box, hass, code, { onEdit, onBack }) {
     const enc = store.enclosure(code);
     try {
       if (await handlePotClick(host, hass, btn, enc.pots || [], () => noteRound(enc.code, "🥬"))) return;
+      if (await handleAntClick(host, hass, btn, () => noteRound(enc.code, "🐜"))) return;
       if (btn.dataset.plant) {
         selectedPlants.has(btn.dataset.plant) ? selectedPlants.delete(btn.dataset.plant) : selectedPlants.add(btn.dataset.plant);
         draw();

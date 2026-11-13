@@ -719,8 +719,17 @@ class Database:
                 count_history = [
                     (_parse(r["ts"]), r["value"])
                     for r in self.conn.execute(
-                        "SELECT ts, value FROM (SELECT ts, value FROM measurement"
-                        " WHERE animal_id = ? AND kind = 'count' ORDER BY ts DESC LIMIT 12) ORDER BY ts",
+                        "SELECT ts, value FROM (SELECT ts, value, rowid AS rid FROM measurement"
+                        " WHERE animal_id = ? AND kind = 'count' ORDER BY ts DESC, rowid DESC LIMIT 12) ORDER BY ts, rid",
+                        (animal_id,),
+                    )
+                ]
+                census = [
+                    (_parse(r["ts"]), json.loads(r["data"] or "{}"))
+                    for r in self.conn.execute(
+                        "SELECT ts, data FROM (SELECT ts, data, id FROM journal_entry"
+                        " WHERE animal_id = ? AND type = 'census' ORDER BY ts DESC, id DESC LIMIT 30)"
+                        " ORDER BY ts, id",
                         (animal_id,),
                     )
                 ]
@@ -752,6 +761,8 @@ class Database:
                 premolt_since=last.get("premolt_observed"),
                 adult_since=_parse(adult_row["ts"]) if adult_row and adult_row["ts"] else None,
                 count_history=count_history,
+                last_by_type={k: v for k, v in last.items() if v is not None},
+                census=census,
             )
         return bundles
 

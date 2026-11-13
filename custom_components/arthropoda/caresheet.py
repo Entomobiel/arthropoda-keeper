@@ -89,6 +89,7 @@ INFO_KEYS = (
     "development_time",
     "diapause",
     "feeder",
+    "ant",
     "notes",
     "extra",
 )
@@ -99,6 +100,21 @@ DIAPAUSE_SCHEMA = vol.Schema(
         vol.Optional("max_days"): _POS,
         vol.Optional("start_months"): [vol.All(vol.Coerce(int), vol.Range(min=1, max=12))],
         vol.Optional("stage"): vol.In(STAGES),
+        vol.Optional("notes"): str,
+    },
+    extra=vol.ALLOW_EXTRA,
+)
+
+# Mieren: {type, founding, polygyne, polymorphic, development_days, food, queen_check_days}
+ANT_SCHEMA = vol.Schema(
+    {
+        vol.Optional("type"): vol.In(("generalist", "harvester", "leafcutter", "predator", "honeypot")),
+        vol.Optional("founding"): vol.In(("claustral", "semi_claustral", "parasitic", "unknown")),
+        vol.Optional("polygyne"): bool,
+        vol.Optional("polymorphic"): bool,
+        vol.Optional("development_days"): _FREE_DICT,
+        vol.Optional("food"): _FREE_DICT,
+        vol.Optional("queen_check_days"): _POS,
         vol.Optional("notes"): str,
     },
     extra=vol.ALLOW_EXTRA,
@@ -126,6 +142,8 @@ SPECIES_SCHEMA = vol.Schema(
         vol.Optional("diapause"): DIAPAUSE_SCHEMA,
         # Voederdier (bv. krekels, kakkerlakken, fruitvliegjes)
         vol.Optional("feeder"): bool,
+        # Mieren (zie ants.py)
+        vol.Optional("ant"): ANT_SCHEMA,
         vol.Optional("notes"): str,
         # Vrij blok voor alles wat (nog) geen eigen veld heeft.
         vol.Optional("extra"): _FREE_DICT,

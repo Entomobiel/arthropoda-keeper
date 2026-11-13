@@ -29,7 +29,7 @@ from homeassistant.util import dt as dt_util
 from .ai_import import ImportFailed, ai_entities, async_extract, async_inat_photos
 from .caresheet import CaresheetError, dump_documents, parse_caresheets
 from .http_views import document_dir, photo_dir
-from . import food
+from . import ants as ants_mod, food, nest_modules
 from .nfc import EVENT_TAG_SCANNED, deep_link
 from .const import (
     ACTUATOR_KEYS,
@@ -167,6 +167,7 @@ def serialize_animals(hass: HomeAssistant) -> list[dict[str, Any]]:
                 "is_day": snap.is_day,
                 "feeding_paused": snap.feeding_paused,
                 "insights": snap.insights,
+                "ant": snap.ant,
                 "readings": {
                     "temperature": snap.readings.temperature,
                     "temperatures": snap.readings.temperatures,
@@ -284,6 +285,10 @@ def serialize_enclosures(hass: HomeAssistant) -> list[dict[str, Any]]:
                 "plants": plants,
                 # Voedselbakjes die nu in deze kast staan (zie food.py).
                 "dli": dli_status(hass, (enc.get("config") or {}).get(CONF_PLANTS) or []) if plants else None,
+                "modules": [
+                    {**m, "values": coordinator.module_values(m)}
+                    for m in (enc.get("config") or {}).get("modules") or []
+                ],
                 "pots": [serialize_pot(coordinator, p) for p in coordinator.pots if p.get("enclosure_id") == enc_id],
                 # Planten sturen het klimaat (alleen zonder dieren in de kast).
                 "plant_cabinet": plant_cabinet,
@@ -1074,6 +1079,9 @@ async def ws_enclosure_save(hass: HomeAssistant, connection, msg) -> None:
             cfg[CONF_PLANT_CLIMATE] = False
         if raw.get(CONF_LIGHT_DLI) is True:
             cfg[CONF_LIGHT_DLI] = True
+        modules = nest_modules.clean_modules(raw.get("modules"), old.get("modules"))
+        if modules:
+            cfg["modules"] = modules
         if old.get("snooze"):
             cfg["snooze"] = old["snooze"]
         item["config"] = cfg
@@ -1346,6 +1354,57 @@ async def ws_pot_replace(hass: HomeAssistant, connection, msg) -> None:
     await _food_action(hass, connection, msg, lambda c: c.async_pot_replace(msg["pot_id"]))
 
 
+_ANT_CHANGES = vol.Schema(
+    {
+        vol.Optional("type"): vol.Any(None, vol.In(("generalist", "harvester", "leafcutter", "predator", "honeypot"))),
+        vol.Optional("founding"): vol.Any(None, vol.In(("claustral", "semi_claustral", "parasitic", "unknown"))),
+        vol.Optional("stage"): vol.Any(None, "", vol.In(ants_mod.STAGES)),
+        vol.Optional("polygyne"): vol.Any(None, bool),
+        vol.Optional("polymorphic"): vol.Any(None, bool),
+        vol.Optional("queen_check_days"): vol.Any(None, vol.All(vol.Coerce(float), vol.Range(min=1, max=3650))),
+        vol.Optional("caught_place"): vol.Any(None, str),
+        vol.Optional("food"): vol.Any(None, {vol.In(ants_mod.STREAMS): vol.Any(None, vol.All(vol.Coerce(float), vol.Range(min=0, max=365)))}),
+        vol.Optional("enabled"): bool,
+    }
+)
+
+
+@websocket_api.websocket_command(
+    {vol.Required("type"): "arthropoda/ant/update", vol.Required("animal_id"): str,
+     vol.Required("changes"): _ANT_CHANGES}
+)
+@websocket_api.async_response
+async def ws_ant_update(hass: HomeAssistant, connection, msg) -> None:
+    """Mierengegevens van een kolonie (soort mier, stichting, fase, voedselstromen, ...)."""
+    _, runtime = _require(hass, connection, msg)
+    if runtime is None:
+        return
+    try:
+        await runtime.coordinator.async_update_ant(msg["animal_id"], msg["changes"])
+    except KeyError:
+        _error(connection, msg, "not_found", "Onbekend dier")
+        return
+    connection.send_result(msg["id"])
+
+
+@websocket_api.websocket_command(
+    {vol.Required("type"): "arthropoda/module/wetted", vol.Required("enclosure_id"): int,
+     vol.Required("index"): int}
+)
+@websocket_api.async_response
+async def ws_module_wetted(hass: HomeAssistant, connection, msg) -> None:
+    """Nestmodule (gips) bevochtigd."""
+    _, runtime = _require(hass, connection, msg)
+    if runtime is None:
+        return
+    try:
+        await runtime.coordinator.async_module_wetted(msg["enclosure_id"], msg["index"])
+    except ValueError as err:  # ook ontbrekend scanbewijs
+        _error(connection, msg, "invalid", str(err))
+        return
+    connection.send_result(msg["id"])
+
+
 @websocket_api.websocket_command(
     {vol.Required("type"): "arthropoda/task/done", vol.Required("uid"): str}
 )
@@ -1404,6 +1463,8 @@ def async_register_websocket(hass: HomeAssistant) -> None:
         ws_pot_finish,
         ws_pot_replace,
         ws_pot_stage,
+        ws_ant_update,
+        ws_module_wetted,
         ws_task_done,
         ws_nfc_listen,
         ws_breeding_list,

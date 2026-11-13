@@ -2,7 +2,7 @@
 
 Home Assistant-integratie voor het houden van insecten, spinnen, schorpioenen, pissebedden en andere geleedpotigen, inclusief waterinsecten. Elk dier of elke kolonie wordt een eigen apparaat met klimaatbewaking, tellers en een dagboek, vergelijkbaar met de plant monitor.
 
-> **Status: versie 0.13** – kern, klimaat, opvolging, paneel/kaarten, AI-caresheets, foto's, kweek, voorraad, documenten, diapauze, kasten met NFC/QR, plantenkasten met Plant Monitor en verzorgingstaken per plant, voedselplanning met bakjes en groeifasen, sproeien op bodemvocht met pompjes, groeilampen op DLI, aandachtspunten per dier (premolt, vervelling, levensverwachting, kolonie), aandringen met scanbewijs. Zie [docs/ONTWERP.md](docs/ONTWERP.md).
+> **Status: versie 0.14** – kern, klimaat, opvolging, paneel/kaarten, AI-caresheets, foto's, kweek, voorraad, documenten, diapauze, kasten met NFC/QR, plantenkasten met Plant Monitor en verzorgingstaken per plant, voedselplanning met bakjes en groeifasen, sproeien op bodemvocht met pompjes, groeilampen op DLI, aandachtspunten per dier (premolt, vervelling, levensverwachting, kolonie), mierenmodule (stichtingsstation, tellingen, voedselstromen, nestmodules), aandringen met scanbewijs. Zie [docs/ONTWERP.md](docs/ONTWERP.md).
 
 ## Aandringen bij taken over tijd (fase 9)
 
@@ -64,6 +64,45 @@ Tab **Voer**: elk bakje voedselplanten gevolgd van zaaien tot opeten. Stel per p
 - **Fototijdlijn**: met **📷** voeg je per bakje foto's toe, ook rechtstreeks met de camera van je gsm.
   - Elke foto krijgt de fase van dat moment mee.
   - De foto's staan in `/config/arthropoda/photos/pots/` en gaan dus mee in back-ups.
+
+## Mieren (0.14)
+
+De tab **Mieren** is er voor mierenkolonies. Een kolonie is een dier waarvan de soort de groep *mier* heeft, of dat als mierenkolonie werd toegevoegd. Dat laatste kan ook als de soort nog gedetermineerd moet worden.
+
+- **Koninginnen verzamelen**:
+  - Met **＋ Koninginnen** voeg je er één of meer tegelijk toe, met soort, vangstdatum en vindplaats. Ze krijgen namen als *Lasius Q1*, *Lasius Q2*, …
+  - Ze komen in het **stichtingsstation**. Daar duid je er meerdere aan en noteer je met één klik een controle voor allemaal.
+  - Bij een **claustrale stichting** zijn er geen voedertaken. Je krijgt de tip "niet voederen, niet storen".
+  - De **eerste werksters** worden verwacht op basis van de vangstdatum of de eerste eitjes, plus de ontwikkeltijd uit de caresheet. Duurt het te lang, dan krijg je een waarschuwing.
+- **Telling (📋)**: hiermee noteer je:
+  - de koningin: gezien, niet gezien of dood (bij polygyne soorten met het aantal);
+  - het aantal werksters (en majors bij polymorfe soorten);
+  - eitjes, larven en poppen, in vier niveaus van *geen* tot *veel*;
+  - of je gevleugelden gezien hebt.
+
+  Uit de tellingen volgt de **fase** (*stichting → eerste werksters → groeiend → volwassen*), die je ook vast kunt zetten. Je krijgt meldingen als:
+  - de koningin lang niet gezien is (de termijn stel je zelf in, niet tijdens de winterrust);
+  - de koningin dood is;
+  - er geen broed meer is.
+- **Voedselstromen**: per kolonie een eigen knop, een eigen interval en een eigen taak, met de standaardstromen per type mier:
+
+  | Type | Stromen |
+  |---|---|
+  | Alleseter | 💧 water · 🍬 suiker · 🥩 eiwit |
+  | Oogstmier (*Messor*) | 💧 water · 🌾 zaden · 🥩 eiwit |
+  | Bladsnijder | 💧 water · 🍃 vers blad · 🍬 suiker |
+  | Jager | 💧 water · 🥩 eiwit |
+
+  - Per kolonie stel je intervallen in via ⚙ (0 = stroom uit).
+  - Na eiwit krijg je na 2 dagen de taak *voedselresten verwijderen*.
+  - Zijn er veel larven, dan wordt het eiwitinterval automatisch korter.
+  - Tijdens de winterrust (diapauze) zijn er geen voedertaken.
+- **Nestmodules**: in het kastvenster beschrijf je elke lade apart:
+  - elk gipsblok (kamer), het foerageergebied en reageerbuizen;
+  - per module een rol (broedkamer, afvalkamer, …) en eigen sensoren voor temperatuur, luchtvochtigheid en gipsvocht.
+
+  **Gips bevochtigen** wordt een taak zodra de vochtwaarde onder het ingestelde minimum zakt, of anders op een vast interval. Het werkscherm van de lade toont de metingen per module, de knop **💧 Bevochtigd** en de mierenkaarten met hun voedselknoppen.
+- **Caresheet**: met het blok `ant:` stel je dit per soort in: `type`, `founding`, `polygyne`, `polymorphic`, `development_days`, `food` en `queen_check_days`. In `caresheets/voorbeelden.yaml` staan voorbeelden voor *Lasius niger* en *Messor barbarus*. Controleer de waarden.
 
 ## Aandachtspunten per dier (0.13)
 

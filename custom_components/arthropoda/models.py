@@ -93,3 +93,7 @@ class AnimalBundle:
     adult_since: datetime | None = None
     # Tellingen van een kolonie, chronologisch: (tijdstip, aantal)
     count_history: list[tuple[datetime, float]] = field(default_factory=list)
+    # Laatste tijdstip per dagboektype (alle types)
+    last_by_type: dict[str, datetime] = field(default_factory=dict)
+    # Tellingen van een mierenkolonie, chronologisch: (tijdstip, data)
+    census: list[tuple[datetime, dict[str, Any]]] = field(default_factory=list)

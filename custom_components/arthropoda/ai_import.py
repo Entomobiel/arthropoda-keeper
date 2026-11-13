@@ -106,6 +106,7 @@ species:
   development_time: {{months_to_adult: [12, 18], instars_to_adult: 7}}
   diapause: {{min_days: 60, max_days: 120, start_months: [11, 12], stage: pupa, notes: ...}}
   feeder: false
+  ant: {{type: generalist, founding: claustral, polygyne: false, polymorphic: false, development_days: {{egg: [10, 14], larva: [14, 21], pupa: [14, 21]}}, food: {{water: 7, sugar: 4, protein: 4}}}}  # alleen voor mieren
   notes: ...
   extra: {{communal: false}}
 care_profiles:

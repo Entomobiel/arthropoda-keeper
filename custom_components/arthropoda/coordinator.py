@@ -38,6 +38,7 @@ from .const import (
 )
 from .const import MULTI_ACTUATOR_KEYS, SENSOR_KEYS, TUNING_KEYS
 from .db import Database
+from . import ants, nest_modules
 from .insights import REFUSALS_MOLTING, compute_insights, lifespan, refusal_streak
 from .journal import can_molt
 from .models import AnimalBundle
@@ -89,6 +90,8 @@ class AnimalSnapshot:
     diapause: dict[str, Any] | None = None
     # Inzichten (insights.py): premolt-vermoeden, vervelling, levensverwachting, kolonie.
     insights: list[dict[str, Any]] = field(default_factory=list)
+    # Mierenkolonie (ants.py): instellingen, toestand, laatste voedering per stroom.
+    ant: dict[str, Any] | None = None
 
     @property
     def animal(self):
@@ -161,6 +164,8 @@ class ArthropodaCoordinator(DataUpdateCoordinator[dict[str, AnimalSnapshot]]):
         self.food_forecast: dict[str, dict[str, Any]] = {}
         # Sinds wanneer de grond van een plant te droog is (sproeien op bodemvocht).
         self._dry_since: dict[str, datetime] = {}
+        # Sinds wanneer een nestmodule te droog is: {(kast, module-id): tijdstip}
+        self._module_dry: dict[tuple[int, str], datetime] = {}
         # Aandringen en scanbewijs (NagManager, gezet in __init__.py).
         self.nag = None
         self._unsub_state: Callable[[], None] | None = None
@@ -185,6 +190,9 @@ class ArthropodaCoordinator(DataUpdateCoordinator[dict[str, AnimalSnapshot]]):
             for key in (CONF_HUMIDITY_SENSOR, CONF_WATER_TEMPERATURE_SENSOR):
                 if cfg.get(key):
                     ids.add(cfg[key])
+        # Sensoren van nestmodules (gipsblokken).
+        for enc in self.enclosures.values():
+            ids.update(nest_modules.module_sensors((enc.get("config") or {}).get("modules") or []))
         # Bodemvocht en lichtsom van planten met sproeien op bodemvocht of DLI-licht.
         for enc in self.enclosures.values():
             cfg = enc.get("config") or {}
@@ -359,6 +367,7 @@ class ArthropodaCoordinator(DataUpdateCoordinator[dict[str, AnimalSnapshot]]):
                 tasks.append(Task("", "equipment", due, float(interval), enclosure_id=enc_id,
                                   index=index, label=item.get("name") or item.get("type")))
             tasks.extend(self._plant_tasks(enc_id, enc, snooze))
+            tasks.extend(self._module_tasks(enc_id, enc, snooze, now))
         tasks.extend(self._food_tasks(now))
         return tasks
 
@@ -612,6 +621,68 @@ class ArthropodaCoordinator(DataUpdateCoordinator[dict[str, AnimalSnapshot]]):
                                   label=name or plant, plant=plant))
         return tasks
 
+    def module_values(self, module: dict[str, Any]) -> dict[str, float | None]:
+        """Actuele temperatuur, luchtvochtigheid en gipsvocht van een nestmodule."""
+        def value(entity_id: str | None, temperature: bool = False) -> float | None:
+            if not entity_id:
+                return None
+            state = self.hass.states.get(entity_id)
+            if state is None or state.state in (STATE_UNAVAILABLE, STATE_UNKNOWN):
+                return None
+            try:
+                number = float(state.state)
+            except ValueError:
+                return None
+            unit = state.attributes.get("unit_of_measurement")
+            if temperature and unit in (UnitOfTemperature.FAHRENHEIT, UnitOfTemperature.KELVIN):
+                number = TemperatureConverter.convert(number, unit, UnitOfTemperature.CELSIUS)
+            return number
+
+        return {
+            "temperature": value(module.get("temperature_sensor"), temperature=True),
+            "humidity": value(module.get("humidity_sensor")),
+            "moisture": value(module.get("moisture_sensor")),
+        }
+
+    def _module_tasks(self, enc_id: int, enc: dict[str, Any], snooze: dict[str, datetime],
+                      now: datetime) -> list[Task]:
+        """Bevochtigtaak per nestmodule (op sensor of op vast interval)."""
+        tasks: list[Task] = []
+        created = dt_util.parse_datetime(enc.get("created_at") or "") or now
+        for index, module in enumerate((enc.get("config") or {}).get("modules") or []):
+            key = (enc_id, module["id"])
+            due, dry = nest_modules.wet_due(
+                module, self.module_values(module), self._module_dry.get(key), created, now
+            )
+            if dry is None:
+                self._module_dry.pop(key, None)
+            else:
+                self._module_dry[key] = dry
+            if due is None:
+                continue
+            snooze_key = f"module_wet:{index}"
+            if snooze.get(snooze_key) and snooze[snooze_key] > due:
+                due = snooze[snooze_key]
+            tasks.append(Task("", "module_wet", due, float(module.get("wet_every_days") or 0),
+                              enclosure_id=enc_id, index=index, label=module["name"]))
+        return tasks
+
+    async def async_module_wetted(self, enclosure_id: int, index: int) -> None:
+        """Nestmodule bevochtigd: tijdstip bewaren (de taak schuift op)."""
+        enc = self.enclosures.get(enclosure_id)
+        modules = list(((enc or {}).get("config") or {}).get("modules") or [])
+        if not 0 <= index < len(modules):
+            raise ValueError("Onbekende module")
+        task = next((t for t in self.enclosure_tasks
+                     if t.kind == "module_wet" and t.enclosure_id == enclosure_id and t.index == index), None)
+        if task is not None and self.nag is not None:
+            self.nag.check_equipment_allowed(task)
+        modules[index] = {**modules[index], "wetted_at": dt_util.utcnow().isoformat()}
+        self._module_dry.pop((enclosure_id, modules[index]["id"]), None)
+        config = {**(enc.get("config") or {}), "modules": modules}
+        await self.hass.async_add_executor_job(self.db.save_enclosure, {**enc, "config": config})
+        await self.async_refresh()
+
     def _moisture_due(self, plant: str, settings: dict[str, Any], watered: datetime | None):
         """Sproeitaak op bodemvocht.
 
@@ -848,6 +919,8 @@ class ArthropodaCoordinator(DataUpdateCoordinator[dict[str, AnimalSnapshot]]):
                     molt_times=bundle.molt_times, next_molt=snapshot.next_molt, life=life,
                     sex=animal.sex, stage=animal.stage, counts=bundle.count_history, now=now,
                 )
+                if ants.is_ant(bundle.species.group if bundle.species else None, animal.info):
+                    self._apply_ant(snapshot, baseline, snoozed, now)
             result[animal_id] = snapshot
         self.enclosure_tasks = self._enclosure_tasks(result, now)
         self.plant_snapshots = self._plant_snapshots(now)
@@ -910,6 +983,9 @@ class ArthropodaCoordinator(DataUpdateCoordinator[dict[str, AnimalSnapshot]]):
         if task.enclosure_id is None:
             await self.async_log([task.animal_id], task.journal_type, data={"source": "todo"})
             return
+        if task.kind == "module_wet":
+            await self.async_module_wetted(task.enclosure_id, task.index)
+            return
         if task.kind == food.TASK_SOW:
             await self.async_sow(task.plant, task.enclosure_id)
             return
@@ -970,7 +1046,7 @@ class ArthropodaCoordinator(DataUpdateCoordinator[dict[str, AnimalSnapshot]]):
         if task.plant is not None:
             key = f"{task.kind}:{task.plant}" + (f":{task.index}" if task.index is not None else "")
         else:
-            key = f"equipment:{task.index}" if task.kind == "equipment" else task.kind
+            key = f"{task.kind}:{task.index}" if task.kind in ("equipment", "module_wet") else task.kind
         config = dict(enc.get("config") or {})
         config["snooze"] = {**(config.get("snooze") or {}), key: until.isoformat()}
         await self.hass.async_add_executor_job(
@@ -1008,6 +1084,47 @@ class ArthropodaCoordinator(DataUpdateCoordinator[dict[str, AnimalSnapshot]]):
         animal = self.data[animal_id].animal
         snooze = {**(animal.info.get("snooze") or {}), kind: until.isoformat()}
         await self.async_update_animal(animal_id, info={**animal.info, "snooze": snooze})
+
+    def _apply_ant(self, snapshot: "AnimalSnapshot", baseline: datetime,
+                   snoozed: dict[str, datetime], now: datetime) -> None:
+        """Mierenkolonie: voedselstromen i.p.v. de gewone voedertaak, telling, inzichten."""
+        bundle, animal = snapshot.bundle, snapshot.animal
+        cfg = ants.settings(bundle.species.info if bundle.species else {}, animal.info)
+        started = dt_util.start_of_local_day(dt_util.parse_date(animal.acquired_at)) if animal.acquired_at             and dt_util.parse_date(animal.acquired_at) else animal.created_at
+        state = ants.colony_state(bundle.census, cfg, started, now)
+        diapause = animal.status == "diapause"
+        snapshot.tasks = [t for t in snapshot.tasks if t.kind != "feeding"]
+        snapshot.problems = [p for p in snapshot.problems if p != "feeding_overdue"]
+        for kind, due, days in ants.stream_dues(state, cfg, bundle.last_by_type, baseline, diapause):
+            if snoozed.get(kind) and snoozed[kind] > due:
+                due = snoozed[kind]
+            snapshot.tasks.append(Task(animal.id, kind, due, days))
+        if ants.feeding_blocked(state, cfg):
+            snapshot.feeding_paused = True
+            snapshot.next_feeding = None
+        snapshot.insights = [*snapshot.insights, *ants.ant_insights(state, cfg, diapause, now)]
+        last = {
+            stream: bundle.last_by_type[entry_type].isoformat()
+            for stream, (_kind, entry_type) in ants.STREAM_TASKS.items()
+            if entry_type in bundle.last_by_type
+        }
+        snapshot.ant = {
+            "settings": cfg,
+            "state": state,
+            "intervals": ants.stream_intervals(state, cfg),
+            "last": last,
+            "own": animal.info.get("ant") or {},
+        }
+
+    async def async_update_ant(self, animal_id: str, changes: dict[str, Any]) -> None:
+        """Mierengegevens van een kolonie aanpassen (info["ant"], samengevoegd)."""
+        bundle = self._bundles.get(animal_id)
+        if bundle is None:
+            raise KeyError(animal_id)
+        info = dict(bundle.animal.info)
+        ant = {**(info.get("ant") or {}), **changes}
+        info["ant"] = {k: v for k, v in ant.items() if v not in (None, "")} or {"enabled": True}
+        await self.async_update_animal(animal_id, info=info)
 
     async def async_update_animal(self, animal_id: str, **fields: Any) -> None:
         await self.hass.async_add_executor_job(

@@ -20,6 +20,10 @@ ENTRY_TYPES: dict[str, str] = {
     "remove_leftovers": "feeding",
     "plant_food": "feeding",
     "supplement": "feeding",
+    # Mieren: voedselstromen
+    "feed_sugar": "feeding",
+    "feed_seeds": "feeding",
+    "feed_leaves": "feeding",
     # Hygiëne
     "spot_clean": "hygiene",
     "full_clean": "hygiene",
@@ -52,6 +56,8 @@ ENTRY_TYPES: dict[str, str] = {
     # Metingen
     "measurement": "measurement",
     "count": "measurement",
+    # Mieren: telling (koningin, werksters, broed)
+    "census": "measurement",
     # Gezondheid
     "observation": "health",
     "health_issue": "health",
@@ -209,8 +215,15 @@ def compute_effects(animal: dict[str, Any], entry_type: str, data: dict[str, Any
             except (TypeError, ValueError) as err:
                 raise ValueError(f"Ongeldige waarde voor {key}: {data[key]}") from err
 
+    if entry_type == "census":
+        workers = _as_int(data.get("workers"))
+        if workers is not None:
+            if workers < 0:
+                raise ValueError("Aantal werksters kan niet negatief zijn")
+            data = {**data, "count": workers}
+
     count = _as_int(data.get("count"))
-    if count is not None and entry_type in ("count", "measurement", "hatch"):
+    if count is not None and entry_type in ("count", "measurement", "hatch", "census"):
         if entry_type != "hatch":
             upd["count"] = count
         eff.measurements.append(("count", float(count), None))

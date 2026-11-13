@@ -18,6 +18,9 @@ log_entry:
             - remove_leftovers
             - plant_food
             - supplement
+            - feed_sugar
+            - feed_seeds
+            - feed_leaves
             - spot_clean
             - full_clean
             - substrate_change
@@ -45,6 +48,7 @@ log_entry:
             - split_colony
             - measurement
             - count
+            - census
             - observation
             - health_issue
             - treatment
